@@ -75,7 +75,7 @@ async def test_options(hass, mqtt_transport):
         result["flow_id"], user_input={"timeout": 120}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert entry.options == {"timeout": 120}
+    assert entry.options == {"timeout": 120, "grid_import_sign": "positive"}
 
 
 async def test_diagnostics_redacted(hass):
