@@ -1,0 +1,3 @@
+# Standalone tests only. Does not install Home Assistant.
+pytest>=8,<10
+ruff>=0.12,<1

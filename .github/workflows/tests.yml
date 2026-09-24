@@ -1,0 +1,39 @@
+name: Tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check . && ruff format --check .
+      - run: python -m compileall -q custom_components
+      - run: pytest -q
+  home-assistant:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: '3.13'
+            fixtures: '0.13.305'
+            homeassistant: '2026.1.0'
+          - python: '3.14'
+            fixtures: '0.13.366'
+            homeassistant: '2026.9.3'
+    name: Home Assistant ${{ matrix.homeassistant }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install "pytest-homeassistant-custom-component==${{ matrix.fixtures }}" "homeassistant==${{ matrix.homeassistant }}" paho-mqtt
+      - run: pytest -q -o asyncio_mode=auto

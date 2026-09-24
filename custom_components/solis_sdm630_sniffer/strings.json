@@ -1,0 +1,37 @@
+{
+  "title": "Solis SDM630 Sniffer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solis SDM630 Sniffer",
+        "description": "Listen to raw binary traffic containing both Modbus requests and responses. No requests will be sent.",
+        "data": {
+          "topic": "MQTT topic",
+          "timeout": "Availability timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_topic": "Enter one exact MQTT topic without wildcards.",
+      "invalid_timeout": "Enter a timeout between 1 and 86400 seconds."
+    },
+    "abort": {
+      "mqtt_required": "Configure and enable the built-in MQTT integration first.",
+      "already_configured": "This MQTT topic is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Availability",
+        "description": "A sensor becomes unavailable when its reading is older than this timeout.",
+        "data": {
+          "timeout": "Availability timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_timeout": "Enter a timeout between 1 and 86400 seconds."
+    }
+  }
+}
