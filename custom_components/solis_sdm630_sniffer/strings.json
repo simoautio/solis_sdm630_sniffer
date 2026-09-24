@@ -23,15 +23,28 @@
   "options": {
     "step": {
       "init": {
-        "title": "Availability",
-        "description": "A sensor becomes unavailable when its reading is older than this timeout.",
+        "title": "Energy and availability",
+        "description": "Choose which sign of Total active power means grid import. This affects the two grid power sensors only; meter energy counters keep their original direction. Optionally create six standard Utility Meter helpers from Import energy and Export energy. Existing matching helpers are kept. The first calendar period starts when a helper is created.",
         "data": {
-          "timeout": "Availability timeout (seconds)"
+          "timeout": "Availability timeout (seconds)",
+          "grid_import_sign": "Power sign for grid import",
+          "create_utility_meters": "Create daily, monthly and yearly import/export utility meters"
         }
       }
     },
     "error": {
-      "invalid_timeout": "Enter a timeout between 1 and 86400 seconds."
+      "invalid_timeout": "Enter a timeout between 1 and 86400 seconds.",
+      "invalid_direction": "Select positive or negative power for grid import.",
+      "sources_not_ready": "Enable the Import energy and Export energy entities and load this integration before creating utility meters.",
+      "utility_meters_failed": "Some utility meters could not be created. Existing helpers were kept; check the log and try again to create the missing ones."
+    }
+  },
+  "selector": {
+    "grid_import_sign": {
+      "options": {
+        "positive": "Positive power means import",
+        "negative": "Negative power means import"
+      }
     }
   }
 }

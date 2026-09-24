@@ -22,3 +22,9 @@ Task 4: packaging/README complete; public repository simoautio/solis_sdm630_snif
 - User explicitly authorized public publication to simoautio/solis_sdm630_sniffer. Initial implementation commit ba94f29 pushed to main; public release v0.1.0 published against that tested implementation.
 - The repository was initialized only when publication required it; no feature branch or worktree needed merging. User-selected publication fulfills the finishing workflow's integration decision.
 - Live PUSR/Solis/Eastron hardware validation remains on the user's existing Home Assistant machine. The integration has not been installed on that machine by this session.
+
+## v0.2.0 energy analysis extension
+
+User approved a bounded sensor/options extension: configurable power sign, split grid import/export power, optional daily/monthly/yearly utility meters, existing energy counters/history retained. User confirmed both cumulative energy counters are numeric and has SolisCloud production available; this grid meter tap cannot infer gross PV production.
+Implementation uses native Utility Meter config flows rather than recreating its accounting. Helpers are a one-time, idempotent options action, sourced by entity-registry identity and not hard-coded entity IDs. Independently managed helpers are never deleted or retargeted automatically. Power polarity does not rewrite native meter counters.
+Tests remain standalone locally; Home Assistant tests run only on GitHub Actions. User's existing publication authorization applies to the update.

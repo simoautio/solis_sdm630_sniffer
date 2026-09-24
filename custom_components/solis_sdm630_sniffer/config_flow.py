@@ -12,7 +12,17 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from .const import CONF_TIMEOUT, CONF_TOPIC, DEFAULT_TIMEOUT, DEFAULT_TOPIC, DOMAIN
+from .const import (
+    CONF_CREATE_UTILITY_METERS,
+    CONF_GRID_IMPORT_SIGN,
+    CONF_TIMEOUT,
+    CONF_TOPIC,
+    DEFAULT_GRID_IMPORT_SIGN,
+    DEFAULT_TIMEOUT,
+    DEFAULT_TOPIC,
+    DOMAIN,
+)
+from .utility_meters import UtilityMeterSetupError, async_create_utility_meters
 
 
 def _timeout_schema(default: float) -> dict:
@@ -86,21 +96,59 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SnifferOptionsFlow(OptionsFlow):
-    """Allow adjusting how long a reading remains available."""
+    """Configure power direction, availability, and optional energy helpers."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors = {}
+        default_sign = self.config_entry.options.get(
+            CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN
+        )
         if user_input is not None:
-            if _valid_timeout(user_input[CONF_TIMEOUT]):
-                return self.async_create_entry(title="", data=user_input)
-            errors[CONF_TIMEOUT] = "invalid_timeout"
+            sign = user_input.get(CONF_GRID_IMPORT_SIGN, default_sign)
+            if not _valid_timeout(user_input[CONF_TIMEOUT]):
+                errors[CONF_TIMEOUT] = "invalid_timeout"
+            if sign not in ("positive", "negative"):
+                errors[CONF_GRID_IMPORT_SIGN] = "invalid_direction"
+            if not errors and user_input.get(CONF_CREATE_UTILITY_METERS, False):
+                try:
+                    await async_create_utility_meters(self.hass, self.config_entry)
+                except UtilityMeterSetupError as err:
+                    errors["base"] = str(err)
+            if not errors:
+                # Creating helpers is a one-time action, not a persistent startup
+                # instruction. Future reloads must not recreate user-deleted helpers.
+                options = dict(self.config_entry.options)
+                options.update(
+                    {
+                        CONF_TIMEOUT: user_input[CONF_TIMEOUT],
+                        CONF_GRID_IMPORT_SIGN: sign,
+                    }
+                )
+                return self.async_create_entry(title="", data=options)
         default = self.config_entry.options.get(
             CONF_TIMEOUT, self.config_entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
         )
+        schema = {
+            **_timeout_schema(default),
+            vol.Required(
+                CONF_GRID_IMPORT_SIGN, default=default_sign
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=["positive", "negative"],
+                    translation_key=CONF_GRID_IMPORT_SIGN,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional(
+                CONF_CREATE_UTILITY_METERS, default=False
+            ): selector.BooleanSelector(),
+        }
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(_timeout_schema(default)),
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input
+            ),
             errors=errors,
         )

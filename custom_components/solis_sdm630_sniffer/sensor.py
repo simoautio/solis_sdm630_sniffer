@@ -13,7 +13,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import SnifferConfigEntry
-from .const import DOMAIN
+from .const import CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN, DOMAIN
+from .energy import split_grid_power
 from .registers import REGISTERS
 
 PARALLEL_UPDATES = 0
@@ -24,6 +25,7 @@ class SnifferSensorDescription(SensorEntityDescription):
     """Connect sensor metadata to a zero-based register address."""
 
     address: int
+    grid_direction: str | None = None
 
 
 DESCRIPTIONS = tuple(
@@ -38,6 +40,19 @@ DESCRIPTIONS = tuple(
     for address, register in REGISTERS.items()
 )
 
+GRID_DESCRIPTIONS = tuple(
+    SnifferSensorDescription(
+        key=f"grid_{direction}_power",
+        name=f"Grid {direction} power",
+        address=52,
+        grid_direction=direction,
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+    )
+    for direction in ("import", "export")
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -46,7 +61,8 @@ async def async_setup_entry(
 ) -> None:
     """Expose sensors; unobserved readings remain unavailable."""
     async_add_entities(
-        SnifferSensor(entry, description) for description in DESCRIPTIONS
+        SnifferSensor(entry, description)
+        for description in (*DESCRIPTIONS, *GRID_DESCRIPTIONS)
     )
 
 
@@ -62,7 +78,13 @@ class SnifferSensor(SensorEntity):
     ) -> None:
         self.entity_description = description
         self._runtime = entry.runtime_data
-        self._attr_unique_id = f"{entry.entry_id}_{description.address}"
+        self._import_sign = entry.options.get(
+            CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN
+        )
+        identifier = (
+            description.key if description.grid_direction else description.address
+        )
+        self._attr_unique_id = f"{entry.entry_id}_{identifier}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="Solis SDM630 meter",
@@ -73,7 +95,15 @@ class SnifferSensor(SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return the unrounded meter value for HA's native unit handling."""
-        return self._runtime.values.get(self.entity_description.address)
+        value = self._runtime.values.get(self.entity_description.address)
+        if self.entity_description.grid_direction:
+            imported, exported = split_grid_power(value, self._import_sign)
+            return (
+                imported
+                if self.entity_description.grid_direction == "import"
+                else exported
+            )
+        return value
 
     @property
     def available(self) -> bool:
