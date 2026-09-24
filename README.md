@@ -59,7 +59,7 @@ MQTT packets may contain part of a frame, a complete frame, or multiple frames; 
 
 ## Sensors
 
-39 sensors are registered under one Eastron meter device. A sensor starts **unavailable** until its register is observed. Unpolled sensors may remain unavailable permanently; disable those entities if desired.
+39 meter sensors and 2 derived grid power sensors are registered under one Eastron meter device. A sensor starts **unavailable** until its register is observed. Unpolled sensors may remain unavailable permanently; disable those entities if desired.
 
 | Reading | Zero-based starting register(s) | Unit | State class |
 | --- | --- | --- | --- |
@@ -90,11 +90,61 @@ Device classes match the physical quantities. The meter map follows the [Eastron
 
 ## Availability and configuration
 
-Use **Configure** on the integration to change the timeout from **1 to 86400 seconds**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
+Use **Configure** on the integration to change the power sign, optionally create utility meters, or change the timeout from **1 to 86400 seconds**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
 
 A correctly paired, CRC-valid response refreshes meter freshness. Each individual sensor also has its own freshness timer. Requests alone, CRC failures, exception responses, unpaired responses, and retained messages cannot keep stale readings available. MQTT disconnection immediately makes readings unavailable and clears partial frames; fresh traffic is required after reconnection.
 
 Choose a timeout longer than the slowest register polling interval you want to observe. A request expires after five seconds; a longer request-to-response delay is not paired. Only one outstanding RTU request is tracked. A newer request replaces it.
+
+## Solar and grid energy analysis
+
+### Import and export power
+
+Version 0.2 adds **Grid import power** and **Grid export power** in W. Both use the meter's signed **Total active power**, and only the active direction has a nonzero value.
+
+Open **Settings → Devices & services → Solis SDM630 Sniffer → Configure** and set **Power sign for grid import**:
+
+| Setting | Meter reading | Grid import power | Grid export power |
+| --- | --- | --- | --- |
+| Positive power means import (default) | +1500 W | 1500 W | 0 W |
+| Positive power means import | −1500 W | 0 W | 1500 W |
+| Negative power means import | −1500 W | 1500 W | 0 W |
+| Negative power means import | +1500 W | 0 W | 1500 W |
+
+You can change this setting at any time. It applies to these two power sensors only. The original signed power reading and lifetime energy counters remain untouched, as do all existing sensor IDs and history. The new sensors become unavailable when their source reading is stale; an unavailable source is never converted into zero consumption.
+
+### Daily, monthly, and yearly utility meters
+
+In the same **Configure** screen, select **Create daily, monthly and yearly import/export utility meters**, then save. This creates six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
+
+| Helpers | Source |
+| --- | --- |
+| Import energy daily / monthly / yearly | Meter **Import energy**, register 72 |
+| Export energy daily / monthly / yearly | Meter **Export energy**, register 74 |
+
+These are measured-energy totals from the meter's kWh counters, not estimates from sampled power. Both source entities must be enabled. Entity IDs are looked up in Home Assistant's registry, so renamed sensors work too.
+
+The checkbox is a **one-time action** and clears after saving. Selecting it again reuses matching source/cycle helpers created through the UI (including by this action). YAML-defined utility meters are not detected; if you already use them, keep those and leave this checkbox off. It does not reset totals, recreate helpers on startup, or overwrite helpers you have customized. A retry after partial failure creates only the missing matching helpers. If you have existing helpers with different tariffs, offsets, or counter handling, those remain separate.
+
+Find the created helpers under **Settings → Devices & services → Helpers**. They preserve their totals through restarts and use Home Assistant's local calendar for resets. The initial day/month/year is incomplete: accounting starts when the helper is created, with no historical backfill. Previous-period totals are exposed by the built-in helper. Sources are treated as lifetime counters with **Periodically resetting** disabled, so cumulative changes can be recovered after a temporary source outage. Negative counter corrections are not counted as negative consumption.
+
+The helpers use the meter's original import/export counter directions. The power-sign setting does **not** swap their sources. If your meter's forward/reverse energy directions are opposite to physical grid import/export, map the appropriate counters in the Energy dashboard and adjust the helpers' names/sources yourself. Existing helpers are independently managed and are never deleted or retargeted automatically, including when this integration is removed.
+
+### Energy dashboard and solar production
+
+If the SDM630 measures your connection to the grid, configure **Settings → Dashboards → Energy** using:
+
+| Energy dashboard role | Source |
+| --- | --- |
+| Grid consumption | Meter **Import energy** (kWh) |
+| Return to grid | Meter **Export energy** (kWh) |
+| Solar production | Your inverter's actual solar-production energy sensor, for example from SolisCloud |
+
+Verify the meter's energy direction with known import/export conditions. Use the lifetime energy counters in the Energy dashboard; the daily/monthly/yearly helpers are optional for cards and automations. Do not add both a lifetime counter and its utility-meter helper to the same dashboard role, which would double-count energy.
+
+A meter at the grid connection measures exchange with the grid. It cannot distinguish all solar generation from household consumption: solar used inside the home never crosses that connection. **Total energy** from this meter is **import + export**, not solar production or house consumption. Listening to the Solis-to-meter Modbus link does not add the inverter's own production readings to that stream.
+
+For now, use your existing SolisCloud production sensor alongside the fully local grid readings. Fully local production requires a separate local source exposing the inverter's generation measurements. This integration remains passive and does not query the inverter. With a battery, configure its charge/discharge sources separately before interpreting household consumption or solar self-consumption.
 
 ## Diagnostics and troubleshooting
 

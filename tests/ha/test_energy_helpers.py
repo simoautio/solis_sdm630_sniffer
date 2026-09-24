@@ -198,3 +198,35 @@ async def test_concurrent_requests_do_not_duplicate(hass, energy_entry):
         await hass.async_block_till_done()
     assert sorted(counts) == [0, 6]
     assert len(hass.config_entries.async_entries("utility_meter")) == 6
+
+
+async def test_partial_creation_failure_can_be_retried(hass, energy_entry):
+    register_sources(hass, energy_entry)
+    original_init = hass.config_entries.flow.async_init
+    calls = 0
+
+    async def fail_after_first(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            return {"type": FlowResultType.ABORT, "reason": "test_failure"}
+        return await original_init(*args, **kwargs)
+
+    with (
+        patch.object(hass.config_entries, "async_setup", return_value=True),
+        patch.object(
+            hass.config_entries.flow, "async_init", side_effect=fail_after_first
+        ),
+    ):
+        with pytest.raises(UtilityMeterSetupError, match="utility_meters_failed"):
+            await async_create_utility_meters(hass, energy_entry)
+        await hass.async_block_till_done()
+    entries = hass.config_entries.async_entries("utility_meter")
+    assert len(entries) == 1
+    first_id = entries[0].entry_id
+    with patch.object(hass.config_entries, "async_setup", return_value=True):
+        assert await async_create_utility_meters(hass, energy_entry) == 5
+        await hass.async_block_till_done()
+    entries = hass.config_entries.async_entries("utility_meter")
+    assert len(entries) == 6
+    assert first_id in {entry.entry_id for entry in entries}
