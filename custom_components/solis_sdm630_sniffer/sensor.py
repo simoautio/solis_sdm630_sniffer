@@ -99,6 +99,8 @@ INVERTER_DESCRIPTIONS = (
     ),
 )
 
+HOUSEHOLD_KEYS = {"household_power", "estimated_household_energy"}
+
 BALANCE_STATUSES = [
     "waiting_for_sources",
     "ok",
@@ -116,15 +118,23 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Expose sensors; unobserved readings remain unavailable."""
-    async_add_entities(
-        SnifferSensor(entry, description)
-        for description in (*DESCRIPTIONS, *GRID_DESCRIPTIONS)
-    )
-    if entry.runtime_data.logger:
+    runtime = entry.runtime_data
+    if runtime.topic:
+        async_add_entities(
+            SnifferSensor(entry, description)
+            for description in (*DESCRIPTIONS, *GRID_DESCRIPTIONS)
+        )
+    if runtime.logger:
+        # Household values need both sources; never add always-unavailable ones.
+        both = bool(runtime.topic)
         async_add_entities(
             [
-                *(InverterSensor(entry, item) for item in INVERTER_DESCRIPTIONS),
-                BalanceStatusSensor(entry),
+                *(
+                    InverterSensor(entry, item)
+                    for item in INVERTER_DESCRIPTIONS
+                    if both or item.key not in HOUSEHOLD_KEYS
+                ),
+                *([BalanceStatusSensor(entry)] if both else []),
             ]
         )
 

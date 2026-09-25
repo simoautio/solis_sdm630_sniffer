@@ -20,3 +20,8 @@ DEFAULT_LOGGER_UNIT = 1
 DEFAULT_LOGGER_INTERVAL = 30
 CONF_UTILITY_CYCLES = "utility_meter_cycles"
 CONF_UTILITY_SOURCES = "utility_meter_sources"
+
+CONF_MODE = "mode"
+MODES = ("meter", "logger", "both")
+METER_TITLE = "Solis SDM630 Sniffer"
+LOGGER_TITLE = "Solis inverter"

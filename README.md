@@ -4,11 +4,20 @@
 
 A Home Assistant custom integration that **passively reads Eastron SDM630MCT meter traffic** captured by a PUSR USR-DR134 serial-to-MQTT gateway. Intended for an existing Solis-to-meter RS485 link.
 
-The integration subscribes to raw binary MQTT messages and creates native sensors. The meter sniffer **never publishes MQTT messages, sends Modbus requests, or changes the meter**. Optionally, it can also [read the Solis inverter through its S2-WL-ST logger](#local-inverter-optional), read-only. Home Assistant's shared MQTT integration can independently publish its own birth/status messages.
+At setup, choose what to monitor:
+
+| Mode | What it does | Needs |
+| --- | --- | --- |
+| **Meter only** | Passively decodes SDM630 traffic from MQTT. It **never publishes MQTT messages, sends Modbus requests, or changes the meter**. | MQTT integration, RS485 gateway |
+| **Inverter only** | [Reads the Solis inverter through its S2-WL-ST logger](#local-inverter-optional) over read-only Modbus TCP. | Logger on your network |
+| **Meter and inverter** | Both, plus household power and consumption calculated from the two sources. | Both of the above |
+
+Home Assistant's shared MQTT integration can independently publish its own birth/status messages.
 
 ## Requirements
 
-- Home Assistant **2026.1 or later** with its built-in **MQTT integration configured and enabled**.
+- Home Assistant **2026.1 or later**.
+- For the meter: the built-in **MQTT integration configured and enabled**, and:
 - An SDM630MCT at Modbus slave address **1**, with an existing master polling function **0x04** input registers.
 - A gateway capture that publishes **both requests and responses**, in serial order, on one exact MQTT topic. Default: `solis/rs485/raw`.
 - Raw binary payloads, not hexadecimal text, Base64, JSON, or Modbus TCP.
@@ -24,7 +33,11 @@ On your **Home Assistant machine**:
 3. Find **Solis SDM630 Sniffer** and download it.
 4. Restart Home Assistant.
 5. Go to **Settings → Devices & services → Add integration → Solis SDM630 Sniffer**.
-6. Enter the MQTT topic, availability timeout (default **60 seconds**), update interval (default **30 seconds**) and, optionally, the Solis logger's IP address (see [Local inverter](#local-inverter-optional)).
+6. Choose **What to monitor**: meter and inverter, meter only, or inverter only.
+7. For the meter, enter the MQTT topic, availability timeout (default **60 seconds**) and update interval (default **30 seconds**).
+8. For the inverter, enter the Solis logger's IP address (see [Local inverter](#local-inverter-optional)).
+
+Each mode creates only the devices and entities it can populate. To switch an existing entry between meter-only/both and inverter-only, remove it and add it again; adding or removing the logger on a meter entry works any time under **Configure → Inverter logger**.
 
 This is a HACS **custom repository**, not a listing in HACS's default catalog. No Home Assistant installation is needed on the computer used to clone or develop this repository.
 
@@ -152,7 +165,7 @@ With a battery, configure its charge/discharge sources separately before interpr
 
 ## Local inverter (optional)
 
-Enter the S2-WL-ST logger's IP address when adding the integration, or later in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
+Choose **Inverter only** or **Meter and inverter** when adding the integration and enter the S2-WL-ST logger's IP address, or add it later to a meter entry in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
 
 - **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and logger settings and SolisCloud reporting are not changed. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
 - Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: ModbusError` in diagnostics and stay unavailable.

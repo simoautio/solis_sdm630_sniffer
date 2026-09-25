@@ -18,6 +18,7 @@ from .const import (
     CONF_LOGGER_INTERVAL,
     CONF_LOGGER_PORT,
     CONF_LOGGER_UNIT,
+    CONF_MODE,
     CONF_TIMEOUT,
     CONF_TOPIC,
     CONF_UPDATE_INTERVAL,
@@ -31,6 +32,9 @@ from .const import (
     DEFAULT_TOPIC,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    LOGGER_TITLE,
+    METER_TITLE,
+    MODES,
 )
 from .utility_meters import (
     CYCLES,
@@ -102,6 +106,41 @@ def _host_schema(host: str | None) -> dict:
     return {vol.Optional(CONF_LOGGER_HOST, description={"suggested_value": host}): str}
 
 
+def _logger_schema(current: dict) -> dict:
+    return {
+        **_host_schema(current.get(CONF_LOGGER_HOST)),
+        **{
+            vol.Optional(key, default=current.get(key, default)): (
+                selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=minimum,
+                        max=maximum,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                )
+            )
+            for key, minimum, maximum, default in _LOGGER_NUMBERS
+        },
+    }
+
+
+def _has_meter(entry: ConfigEntry) -> bool:
+    return CONF_TOPIC in entry.data
+
+
+def _sources(entry: ConfigEntry) -> list[str]:
+    """Helper sources whose entities exist for this entry's mode."""
+    meter, logger = _has_meter(entry), bool(entry.options.get(CONF_LOGGER_HOST))
+    needs = {
+        "import": meter,
+        "export": meter,
+        "solar": logger,
+        "household": meter and logger,
+    }
+    return [key for key in SOURCES if needs[key]]
+
+
 def _multi_select(key: str, options, default) -> dict:
     return {
         vol.Optional(key, default=list(default)): selector.SelectSelector(
@@ -125,14 +164,44 @@ def _valid_seconds(value: Any) -> bool:
 
 
 class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Configure one exact MQTT topic per meter stream."""
+    """Set up the passive meter, the read-only logger, or both."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._mode = "meter"
+        self._meter: dict[str, Any] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Require built-in MQTT, then collect the topic and timeout."""
+        """Choose what to monitor; MQTT is only needed for the meter."""
+        if user_input is not None:
+            self._mode = user_input[CONF_MODE]
+            if self._mode == "logger":
+                return await self.async_step_logger()
+            if not mqtt.mqtt_config_entry_enabled(self.hass):
+                return self.async_abort(reason="mqtt_required")
+            return await self.async_step_meter()
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_MODE, default="both"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=list(MODES),
+                            translation_key=CONF_MODE,
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Collect the exact topic, availability timeout and update interval."""
         if not mqtt.mqtt_config_entry_enabled(self.hass):
             return self.async_abort(reason="mqtt_required")
         errors = {}
@@ -148,18 +217,16 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_TIMEOUT] = "invalid_timeout"
             if not _valid_seconds(user_input[CONF_UPDATE_INTERVAL]):
                 errors[CONF_UPDATE_INTERVAL] = "invalid_update_interval"
-            # Logger settings live in options, where Configure can change them.
-            logger = _logger_options(user_input, {}, errors)
-            user_input.pop(CONF_LOGGER_HOST, None)
             if not errors:
                 await self.async_set_unique_id(topic)
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title="Solis SDM630 Sniffer", data=user_input, options=logger
-                )
+                if self._mode == "both":
+                    self._meter = user_input
+                    return await self.async_step_logger()
+                return self.async_create_entry(title=METER_TITLE, data=user_input)
         defaults = user_input or {}
         return self.async_show_form(
-            step_id="user",
+            step_id="meter",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -171,8 +238,35 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
                         defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
                         CONF_UPDATE_INTERVAL,
                     ),
-                    **_host_schema(defaults.get(CONF_LOGGER_HOST)),
                 }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_logger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Collect the logger address; settings live in options for Configure."""
+        errors = {}
+        if user_input is not None:
+            logger = _logger_options(user_input, {}, errors)
+            if not logger:
+                errors[CONF_LOGGER_HOST] = "logger_required"
+            if not errors:
+                if not self._meter:
+                    await self.async_set_unique_id(
+                        f"logger_{logger[CONF_LOGGER_HOST].lower()}"
+                    )
+                    self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=METER_TITLE if self._meter else LOGGER_TITLE,
+                    data=self._meter,
+                    options=logger,
+                )
+        return self.async_show_form(
+            step_id="logger",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(_logger_schema({})), user_input
             ),
             errors=errors,
         )
@@ -190,9 +284,10 @@ class SnifferOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        return self.async_show_menu(
-            step_id="init", menu_options=["meter", "logger", "utility_meters"]
-        )
+        menu = ["logger", "utility_meters"]
+        if _has_meter(self.config_entry):
+            menu.insert(0, "meter")
+        return self.async_show_menu(step_id="init", menu_options=menu)
 
     def _save(self, changes: dict, keep_logger: bool = True) -> FlowResult:
         options = {
@@ -264,24 +359,11 @@ class SnifferOptionsFlow(OptionsFlow):
         current = self.config_entry.options
         if user_input is not None:
             logger = _logger_options(user_input, current, errors)
+            if not logger and not _has_meter(self.config_entry):
+                errors[CONF_LOGGER_HOST] = "logger_required"
             if not errors:
                 return self._save(logger, keep_logger=False)
-        schema = {
-            **_host_schema(current.get(CONF_LOGGER_HOST)),
-            **{
-                vol.Optional(key, default=current.get(key, default)): (
-                    selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=minimum,
-                            max=maximum,
-                            step=1,
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    )
-                )
-                for key, minimum, maximum, default in _LOGGER_NUMBERS
-            },
-        }
+        schema = _logger_schema(current)
         return self.async_show_form(
             step_id="logger",
             data_schema=self.add_suggested_values_to_schema(
@@ -295,10 +377,14 @@ class SnifferOptionsFlow(OptionsFlow):
     ) -> FlowResult:
         """Create missing helpers once; nothing is stored for future startups."""
         errors = {}
+        available = _sources(self.config_entry)
+        default_sources = [
+            key for key in DEFAULT_SOURCES if key in available
+        ] or available[:1]
         if user_input is not None:
             cycles = user_input.get(CONF_UTILITY_CYCLES, DEFAULT_CYCLES)
-            sources = user_input.get(CONF_UTILITY_SOURCES, DEFAULT_SOURCES)
-            if not set(cycles) <= set(CYCLES) or not set(sources) <= set(SOURCES):
+            sources = user_input.get(CONF_UTILITY_SOURCES, default_sources)
+            if not set(cycles) <= set(CYCLES) or not set(sources) <= set(available):
                 errors["base"] = "invalid_helper_selection"
             else:
                 try:
@@ -318,7 +404,9 @@ class SnifferOptionsFlow(OptionsFlow):
                 vol.Schema(
                     {
                         **_multi_select(CONF_UTILITY_CYCLES, CYCLES, DEFAULT_CYCLES),
-                        **_multi_select(CONF_UTILITY_SOURCES, SOURCES, DEFAULT_SOURCES),
+                        **_multi_select(
+                            CONF_UTILITY_SOURCES, available, default_sources
+                        ),
                     }
                 ),
                 user_input,

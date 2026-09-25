@@ -32,14 +32,14 @@ async def test_defaults_and_create(hass, mqtt_transport):
     flow.hass = hass
     flow.context = {"source": "user"}
     flow.handler = DOMAIN
-    form = await flow.async_step_user()
+    form = await flow.async_step_meter()
     assert form["type"] == FlowResultType.FORM
     assert form["data_schema"]({}) == {
         "topic": "solis/rs485/raw",
         "timeout": 60,
         "update_interval": 30,
     }
-    result = await flow.async_step_user({"topic": "solis/rs485/raw", "timeout": 60})
+    result = await flow.async_step_meter({"topic": "solis/rs485/raw", "timeout": 60})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["topic"] == "solis/rs485/raw"
 
@@ -47,38 +47,99 @@ async def test_defaults_and_create(hass, mqtt_transport):
 SKIP_SETUP = "custom_components.solis_sdm630_sniffer.async_setup_entry"
 
 
-async def test_setup_with_optional_logger(hass, mqtt_transport):
-    with patch(SKIP_SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": "user"},
-            data={"topic": "t", "timeout": 60, "logger_host": "192.168.1.135"},
+async def start_setup(hass, mode):
+    """Open Add integration and choose what to monitor."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"mode": mode}
+    )
+
+
+async def test_logger_only_setup_needs_no_mqtt(hass):
+    with (
+        patch(
+            "homeassistant.components.mqtt.mqtt_config_entry_enabled",
+            return_value=False,
+        ),
+        patch(SKIP_SETUP, return_value=True),
+    ):
+        form = await start_setup(hass, "logger")
+        assert form["step_id"] == "logger"
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": ""}
         )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["errors"] == {"logger_host": "logger_required"}
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "http://x/"}
+        )
+        assert result["errors"] == {"logger_host": "invalid_logger"}
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "192.168.1.135"}
+        )
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["title"] == "Solis inverter"
+        assert result["data"] == {}
+        assert result["options"]["logger_host"] == "192.168.1.135"
+        assert result["options"]["logger_port"] == 502
+        # The same logger cannot be added twice.
+        form = await start_setup(hass, "logger")
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "192.168.1.135"}
+        )
+        assert result["reason"] == "already_configured"
+
+
+async def test_both_setup_stores_meter_data_and_logger_options(hass, mqtt_transport):
+    with patch(SKIP_SETUP, return_value=True):
+        form = await start_setup(hass, "both")
+        assert form["step_id"] == "meter"
+        form = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"topic": "t", "timeout": 60}
+        )
+        assert form["step_id"] == "logger"
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "192.168.1.135"}
+        )
+    assert result["title"] == "Solis SDM630 Sniffer"
+    assert result["data"]["topic"] == "t"
     assert "logger_host" not in result["data"]
     assert result["options"]["logger_host"] == "192.168.1.135"
-    assert result["options"]["logger_port"] == 502
+    assert result["result"].unique_id == "t"
 
 
-async def test_setup_rejects_invalid_logger_and_allows_none(hass, mqtt_transport):
-    flow = SnifferConfigFlow()
-    flow.hass = hass
-    result = await flow.async_step_user(
-        {"topic": "t", "timeout": 60, "logger_host": "http://x/"}
+@pytest.mark.parametrize("mode", ["meter", "both"])
+async def test_meter_modes_require_mqtt(hass, mode):
+    with patch(
+        "homeassistant.components.mqtt.mqtt_config_entry_enabled", return_value=False
+    ):
+        result = await start_setup(hass, mode)
+    assert result["reason"] == "mqtt_required"
+
+
+async def test_logger_only_options(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={}, options={"logger_host": "192.168.1.135"}
     )
-    assert result["errors"] == {"logger_host": "invalid_logger"}
-    with patch(SKIP_SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": "user"}, data={"topic": "t", "timeout": 60}
-        )
-    assert result["options"] == {}
+    entry.add_to_hass(hass)
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert menu["menu_options"] == ["logger", "utility_meters"]
+    form = await open_options(hass, entry, "logger")
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={"logger_host": ""}
+    )
+    assert result["errors"] == {"logger_host": "logger_required"}
+    form = await open_options(hass, entry, "utility_meters")
+    assert form["data_schema"]({})["utility_meter_sources"] == ["solar"]
 
 
 @pytest.mark.parametrize("topic", ["", "a/#", "a/+", "a\0b"])
 async def test_invalid_topic(hass, mqtt_transport, topic):
     flow = SnifferConfigFlow()
     flow.hass = hass
-    result = await flow.async_step_user({"topic": topic, "timeout": 60})
+    result = await flow.async_step_meter({"topic": topic, "timeout": 60})
     assert result["errors"] == {"topic": "invalid_topic"}
 
 
@@ -86,7 +147,7 @@ async def test_invalid_topic(hass, mqtt_transport, topic):
 async def test_invalid_timeout(hass, mqtt_transport, timeout):
     flow = SnifferConfigFlow()
     flow.hass = hass
-    result = await flow.async_step_user({"topic": "test", "timeout": timeout})
+    result = await flow.async_step_meter({"topic": "test", "timeout": timeout})
     assert result["errors"] == {"timeout": "invalid_timeout"}
 
 
@@ -96,7 +157,7 @@ async def test_mqtt_required(hass):
     with patch(
         "homeassistant.components.mqtt.mqtt_config_entry_enabled", return_value=False
     ):
-        assert (await flow.async_step_user())["reason"] == "mqtt_required"
+        assert (await flow.async_step_meter())["reason"] == "mqtt_required"
 
 
 @pytest.mark.parametrize(
@@ -169,8 +230,9 @@ async def test_duplicate_topic(hass, mqtt_transport):
     )
     entry.add_to_hass(hass)
     # Use the real manager to translate the duplicate AbortFlow into a result.
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}, data={"topic": "test", "timeout": 60}
+    form = await start_setup(hass, "meter")
+    result = await hass.config_entries.flow.async_configure(
+        form["flow_id"], {"topic": "test", "timeout": 60}
     )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
@@ -208,7 +270,7 @@ async def test_diagnostics_redacted(hass):
 async def test_invalid_update_interval(hass, mqtt_transport, interval):
     flow = SnifferConfigFlow()
     flow.hass = hass
-    result = await flow.async_step_user(
+    result = await flow.async_step_meter(
         {"topic": "test", "timeout": 60, "update_interval": interval}
     )
     assert result["errors"] == {"update_interval": "invalid_update_interval"}

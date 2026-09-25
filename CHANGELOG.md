@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Choose at setup what to monitor: meter and inverter, meter only (MQTT sniffer), or inverter only (logger Modbus TCP).
+- Inverter-only installations do not need MQTT; MQTT is now an optional after-dependency.
+- Each mode creates only entities it can populate: household power, estimated household energy and balance status need both sources.
+- Configure shows only the pages and utility meter sources that apply to the entry. Existing entries keep working unchanged.
+
 ## 0.4.1
 
 - Optionally enter the Solis logger IP address when adding the integration.

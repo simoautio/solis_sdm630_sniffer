@@ -4,12 +4,28 @@
     "step": {
       "user": {
         "title": "Solis SDM630 Sniffer",
-        "description": "Listen to raw binary traffic containing both Modbus requests and responses. No requests will be sent. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate. Optionally enter the IP address or hostname of the Solis S2-WL-ST logger to add read-only local inverter readings; leave it empty to skip. You can change it later under Configure.",
+        "description": "Choose what to monitor. The meter is read passively from RS485 traffic published to MQTT (requires the MQTT integration). The inverter is read through the Solis S2-WL-ST logger over read-only Modbus TCP; nothing is written, and SolisCloud reporting is not changed.",
+        "data": {
+          "mode": "What to monitor"
+        }
+      },
+      "meter": {
+        "title": "Meter (MQTT)",
+        "description": "Listen to raw binary traffic containing both Modbus requests and responses. No requests will be sent. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate.",
         "data": {
           "topic": "MQTT topic",
           "timeout": "Availability timeout (seconds)",
-          "update_interval": "Update interval (seconds)",
-          "logger_host": "Logger IP address or hostname (optional)"
+          "update_interval": "Update interval (seconds)"
+        }
+      },
+      "logger": {
+        "title": "Inverter logger (Modbus TCP)",
+        "description": "Enter the IP address or hostname of the Solis S2-WL-ST logger. It is only read (Modbus function 04). You can change these settings later under Configure.",
+        "data": {
+          "logger_host": "Logger IP address or hostname",
+          "logger_port": "Modbus TCP port",
+          "logger_unit": "Inverter Modbus unit ID",
+          "logger_interval": "Polling interval (seconds)"
         }
       }
     },
@@ -17,11 +33,12 @@
       "invalid_topic": "Enter one exact MQTT topic without wildcards.",
       "invalid_timeout": "Enter a timeout between 1 and 86400 seconds.",
       "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
-      "invalid_logger": "Enter a hostname or IP address without scheme or port."
+      "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
+      "logger_required": "Enter the logger's IP address or hostname."
     },
     "abort": {
       "mqtt_required": "Configure and enable the built-in MQTT integration first.",
-      "already_configured": "This MQTT topic is already configured."
+      "already_configured": "This MQTT topic or logger is already configured."
     }
   },
   "options": {
@@ -69,7 +86,8 @@
       "utility_meters_failed": "Some utility meters could not be created. Existing helpers were kept; check the log and try again to create the missing ones.",
       "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
       "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
-      "invalid_helper_selection": "Select only the listed cycles and sources."
+      "invalid_helper_selection": "Select only the listed cycles and sources.",
+      "logger_required": "This entry only monitors the inverter, so a logger address is required. Remove the integration to stop monitoring."
     }
   },
   "selector": {
@@ -94,6 +112,13 @@
         "export": "Meter export energy",
         "solar": "Estimated solar energy",
         "household": "Estimated household energy"
+      }
+    },
+    "mode": {
+      "options": {
+        "both": "Meter and inverter",
+        "meter": "Meter only (MQTT sniffer)",
+        "logger": "Inverter only (logger Modbus TCP)"
       }
     }
   },

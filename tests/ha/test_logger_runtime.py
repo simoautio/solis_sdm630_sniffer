@@ -179,3 +179,43 @@ async def test_no_logger_entities_without_host(hass, mqtt_transport):
     entities = er.async_entries_for_config_entry(er.async_get(hass), "plain")
     assert entities and not any("_inverter_" in e.unique_id for e in entities)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_logger_only_setup(hass, mqtt_transport):
+    from homeassistant.helpers import entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.solis_sdm630_sniffer.const import DOMAIN
+
+    subscribe, _ = mqtt_transport
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="solo",
+        data={},
+        options={"logger_host": "192.0.2.10"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
+        reader.return_value.__aenter__ = AsyncMock(side_effect=TimeoutError)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        subscribe.assert_not_called()
+        ids = {
+            e.unique_id
+            for e in er.async_entries_for_config_entry(er.async_get(hass), "solo")
+        }
+        assert "solo_inverter_solar_ac_power" in ids
+        assert "solo_inverter_estimated_solar_energy" in ids
+        assert (
+            not {
+                "solo_52",
+                "solo_inverter_household_power",
+                "solo_inverter_estimated_household_energy",
+                "solo_inverter_balance_status",
+            }
+            & ids
+        )
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()

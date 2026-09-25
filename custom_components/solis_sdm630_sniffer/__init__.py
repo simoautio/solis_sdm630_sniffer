@@ -24,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SnifferConfigEntry) -> b
     """Set up one stream and forward native sensors."""
     runtime = entry.runtime_data = SnifferRuntime(
         hass,
-        entry.data[CONF_TOPIC],
+        entry.data.get(CONF_TOPIC),  # None: logger-only, the meter never starts.
         entry.options.get(CONF_TIMEOUT, entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)),
         update_interval=entry.options.get(
             CONF_UPDATE_INTERVAL,
@@ -32,7 +32,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SnifferConfigEntry) -> b
         ),
     )
     try:
-        await runtime.async_start()
+        if runtime.topic:
+            await runtime.async_start()
         if entry.options.get(CONF_LOGGER_HOST):
             runtime.logger = LoggerRuntime(hass, runtime, entry.entry_id, entry.options)
             await runtime.logger.async_start()
