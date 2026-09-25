@@ -152,7 +152,20 @@ For now, use your existing SolisCloud production sensor alongside the fully loca
 
 ## Diagnostics and troubleshooting
 
-Download diagnostics from the integration's menu. They include frame counters, buffer size, pending request metadata, and sample ages. The topic is redacted, and raw payload history is not included.
+Download diagnostics from the integration's menu. They include traffic status, frame counters, buffer size, last/pending request metadata, and sample ages. The topic is redacted, and raw payload history is not included.
+
+The `traffic_status` field describes recognized traffic within the configured availability timeout:
+
+| Status | Meaning |
+| --- | --- |
+| `disconnected` | The integration is stopped or MQTT is disconnected. |
+| `no_recent_requests_or_paired_responses` | No recent valid requests or matched responses have been decoded; this does not prove that MQTT is silent. |
+| `requests_without_paired_responses` | Recent valid meter requests are arriving, but no recent matched response has been decoded. |
+| `receiving_responses` | Recent requests and replies have been successfully matched; individual unpolled or invalid readings can still be unavailable. |
+
+`requests_without_paired_responses` can appear briefly before the first reply. If it persists, inspect both directions of the serial capture, gateway topic routing, and the meter connection. It does not identify a wiring fault by itself. The `replaced_requests` counter counts valid requests that replaced an outstanding request before a matching reply was observed. A growing count can reveal missing replies even when frequent requests prevent the five-second request timeout from expiring. Counters accumulate until the entry reloads; recent traffic status and last-request metadata reset on MQTT reconnection.
+
+A two-minute field capture contained 1,710 repetitions of a valid request for slave 1, function 04, starting at register 52 for 10 registers, with no replies. This proves those requests reach the MQTT topic, but supplies no measurements and does not establish the meter's normal polling coverage. With valid replies, that range includes total active, apparent, and reactive power. It does not include the cumulative energy counters; wait for a capture with working replies before drawing conclusions about other available sensors.
 
 For debug logging, enable debug logging in the integration menu or add:
 

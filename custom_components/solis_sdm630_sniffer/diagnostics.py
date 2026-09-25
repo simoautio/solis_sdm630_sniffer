@@ -13,8 +13,10 @@ async def async_get_config_entry_diagnostics(
     runtime = entry.runtime_data
     now = runtime.clock()
     pending = runtime.parser.pending
+    last_request = runtime.parser.last_request
     return {
         "topic": "**REDACTED**",
+        "traffic_status": runtime.traffic_status,
         "timeout": runtime.timeout,
         "update_interval": runtime.update_interval,
         "last_response_age": (
@@ -28,6 +30,15 @@ async def async_get_config_entry_diagnostics(
         "parser": {
             "buffer_size": runtime.parser.buffer_size,
             "counters": dict(runtime.parser.counters),
+            "last_request": (
+                {
+                    "start": last_request.start,
+                    "count": last_request.count,
+                    "age": now - last_request.received_at,
+                }
+                if last_request
+                else None
+            ),
             "pending_request": (
                 {
                     "start": pending.start,

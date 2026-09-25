@@ -49,6 +49,7 @@ class StreamParser:
     def __init__(self) -> None:
         self._buffer = bytearray()
         self.pending: Request | None = None
+        self.last_request: Request | None = None
         self._last_byte_at: float | None = None
         self.counters: Counter[str] = Counter()
 
@@ -61,6 +62,7 @@ class StreamParser:
         """Forget partial frames and pairing, retaining diagnostic counters."""
         self._buffer.clear()
         self.pending = None
+        self.last_request = None
         self._last_byte_at = None
 
     def feed(self, payload: bytes, now: float) -> list[MeterUpdate]:
@@ -188,7 +190,9 @@ class StreamParser:
             self.counters[kind + "s"] += 1
             if kind == "request":
                 start, count = struct.unpack_from(">HH", frame, 2)
-                self.pending = Request(start, count, now)
+                if self.pending is not None:
+                    self.counters["replaced_requests"] += 1
+                self.pending = self.last_request = Request(start, count, now)
                 _LOGGER.debug(
                     "Decoded request: slave=1 function=04 start=%d count=%d",
                     start,

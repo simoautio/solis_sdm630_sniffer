@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Add diagnostic traffic status distinguishing recent requests without matched replies from healthy responses, inactivity, and disconnection.
+- Count outstanding requests replaced before a reply is observed, and retain the last request range in diagnostics.
+- Add regression coverage from the request-only field capture and document how to interpret missing replies without assuming a wiring fault.
+
 ## 0.3.0
 
 - Add a configurable update interval in setup and Configure (1–86400 seconds, default 30 seconds). Existing installations also use 30 seconds unless configured otherwise.

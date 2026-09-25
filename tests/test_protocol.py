@@ -177,3 +177,41 @@ def test_response_prefix_is_also_crc_valid_request(cut):
     updates += parser.feed(reply[cut:], now=0.2)
     assert values(updates) == [{0: struct.unpack(">f", reply[3:7])[0]}]
     assert parser.counters["requests"] == 1
+
+
+def test_captured_request_only_stream_and_recovery():
+    # Exact CRC-valid request seen 1,710 times in the two-minute field capture.
+    captured_request = bytes.fromhex("01040034000a31c3")
+    parser = StreamParser()
+    for index in range(1710):
+        assert parser.feed(captured_request, now=index * 0.07) == []
+    assert parser.counters["requests"] == 1710
+    assert parser.counters["replaced_requests"] == 1709
+    assert parser.counters["paired_responses"] == 0
+    assert parser.counters["expired_requests"] == 0
+    assert parser.buffer_size == 0
+    assert parser.last_request.start == 52
+    assert parser.last_request.count == 10
+    assert parser.last_request.received_at == 1709 * 0.07
+
+    # Synthetic reply: validates recovery, not a measurement from the capture.
+    assert values(parser.feed(response(-1200, 0, 1300, 0, 500), now=120)) == [
+        {52: -1200, 54: 0, 56: 1300, 58: 0, 60: 500}
+    ]
+    assert parser.pending is None
+    assert parser.last_request.start == 52
+    assert parser.counters["paired_responses"] == 1
+    parser.reset()
+    assert parser.last_request is None
+    assert parser.counters["replaced_requests"] == 1709
+
+
+def test_expired_or_answered_requests_are_not_counted_as_replaced():
+    parser = StreamParser()
+    parser.feed(request(), now=0)
+    parser.feed(request(), now=6)
+    assert parser.counters["expired_requests"] == 1
+    assert parser.counters["replaced_requests"] == 0
+    parser.feed(response(230), now=6.1)
+    parser.feed(request(), now=6.2)
+    assert parser.counters["replaced_requests"] == 0

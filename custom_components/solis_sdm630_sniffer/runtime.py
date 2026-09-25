@@ -131,6 +131,22 @@ class SnifferRuntime:
                 self.updated_at[address] = now
         self._refresh(now, False)
 
+    @property
+    def traffic_status(self) -> str:
+        """Describe recent recognized traffic without diagnosing the hardware."""
+        if not self._running or not self._connected:
+            return "disconnected"
+        now = self.clock()
+        if (
+            self.last_response_at is not None
+            and now - self.last_response_at < self.timeout
+        ):
+            return "receiving_responses"
+        request = self.parser.last_request
+        if request is not None and now - request.received_at < self.timeout:
+            return "requests_without_paired_responses"
+        return "no_recent_requests_or_paired_responses"
+
     def is_available(self, address: int) -> bool:
         """Both the stream and this specific reading must be fresh."""
         now = self.clock()
