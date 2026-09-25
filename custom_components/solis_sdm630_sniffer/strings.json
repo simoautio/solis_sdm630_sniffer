@@ -4,18 +4,20 @@
     "step": {
       "user": {
         "title": "Solis SDM630 Sniffer",
-        "description": "Listen to raw binary traffic containing both Modbus requests and responses. No requests will be sent. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate.",
+        "description": "Listen to raw binary traffic containing both Modbus requests and responses. No requests will be sent. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate. Optionally enter the IP address or hostname of the Solis S2-WL-ST logger to add read-only local inverter readings; leave it empty to skip. You can change it later under Configure.",
         "data": {
           "topic": "MQTT topic",
           "timeout": "Availability timeout (seconds)",
-          "update_interval": "Update interval (seconds)"
+          "update_interval": "Update interval (seconds)",
+          "logger_host": "Logger IP address or hostname (optional)"
         }
       }
     },
     "error": {
       "invalid_topic": "Enter one exact MQTT topic without wildcards.",
       "invalid_timeout": "Enter a timeout between 1 and 86400 seconds.",
-      "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds."
+      "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
+      "invalid_logger": "Enter a hostname or IP address without scheme or port."
     },
     "abort": {
       "mqtt_required": "Configure and enable the built-in MQTT integration first.",
@@ -25,19 +27,38 @@
   "options": {
     "step": {
       "init": {
-        "title": "Updates, energy and availability",
-        "description": "Choose which sign of Total active power means grid import. This affects the two grid power sensors only; meter energy counters keep their original direction. Optionally create six standard Utility Meter helpers from Import energy and Export energy. Existing matching helpers are kept. The first calendar period starts when a helper is created. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate. Optionally enter the IP address or hostname of the Solis S2-WL-ST logger to add local inverter readings. The logger is only read (Modbus function 04); nothing is written to the inverter or logger, and SolisCloud reporting is not changed. Leave it empty to disable. When creating utility meters, select the cycles and sources; Estimated solar/household energy sources need a configured logger.",
+        "title": "Configure",
+        "menu_options": {
+          "meter": "Meter",
+          "logger": "Inverter logger",
+          "utility_meters": "Create utility meters"
+        }
+      },
+      "meter": {
+        "title": "Meter",
+        "description": "Choose which sign of Total active power means grid import. This affects the grid import/export power sensors only; meter energy counters keep their original direction. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate.",
         "data": {
           "timeout": "Availability timeout (seconds)",
-          "grid_import_sign": "Power sign for grid import",
-          "create_utility_meters": "Create daily, monthly and yearly import/export utility meters",
           "update_interval": "Update interval (seconds)",
-          "logger_host": "Logger IP address or hostname (optional)",
-          "logger_port": "Logger Modbus TCP port",
+          "grid_import_sign": "Power sign for grid import"
+        }
+      },
+      "logger": {
+        "title": "Inverter logger",
+        "description": "Enter the IP address or hostname of the Solis S2-WL-ST logger to add local inverter readings. The logger is only read (Modbus function 04); nothing is written to the inverter or logger, and SolisCloud reporting is not changed. Leave the address empty to disable polling.",
+        "data": {
+          "logger_host": "Logger IP address or hostname",
+          "logger_port": "Modbus TCP port",
           "logger_unit": "Inverter Modbus unit ID",
-          "logger_interval": "Logger polling interval (seconds)",
-          "utility_meter_cycles": "Utility meter cycles",
-          "utility_meter_sources": "Utility meter sources"
+          "logger_interval": "Polling interval (seconds)"
+        }
+      },
+      "utility_meters": {
+        "title": "Create utility meters",
+        "description": "Create standard Utility Meter helpers for the selected cycles and sources. Existing matching helpers are kept, and nothing is recreated on restart. The first period starts when a helper is created. Estimated solar/household energy sources need a configured logger.",
+        "data": {
+          "utility_meter_cycles": "Cycles",
+          "utility_meter_sources": "Sources"
         }
       }
     },

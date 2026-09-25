@@ -22,7 +22,7 @@ async def async_get_config_entry_diagnostics(
                 "port": logger.port,
                 "unit": logger.unit,
                 "interval": logger.interval,
-                "running": logger._running,
+                "running": logger.running,
                 "failures": logger.failures,
                 "last_error": logger.last_error,
                 "balance_status": logger.balance_status,

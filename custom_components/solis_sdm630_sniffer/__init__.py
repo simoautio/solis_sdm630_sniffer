@@ -12,7 +12,7 @@ from .const import (
     DEFAULT_TIMEOUT,
     DEFAULT_UPDATE_INTERVAL,
 )
-from .logger_runtime import LoggerRuntime
+from .logger_runtime import LoggerRuntime, energy_store
 from .runtime import SnifferRuntime
 
 type SnifferConfigEntry = ConfigEntry[SnifferRuntime]
@@ -55,6 +55,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: SnifferConfigEntry) -> 
         await _async_stop(entry.runtime_data)
         return True
     return False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SnifferConfigEntry) -> None:
+    """Delete persisted estimates; Utility Meter helpers are left untouched."""
+    await energy_store(hass, entry.entry_id).async_remove()
 
 
 async def _async_stop(runtime: SnifferRuntime) -> None:

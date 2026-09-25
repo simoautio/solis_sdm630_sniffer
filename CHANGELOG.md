@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Optionally enter the Solis logger IP address when adding the integration.
+- Configure is now a menu: Meter, Inverter logger, and Create utility meters.
+- Clearer inverter entity names (for example Temperature, L1 voltage, PV1 power, Solar power, Reported grid power). Unique IDs are unchanged, so history is kept; existing entity IDs stay as they are.
+- Model, firmware and fault/status bit codes are shown as hex.
+- Removing the integration also deletes its stored estimated-energy totals.
+
 ## 0.4.0
 
 - Add optional read-only Modbus TCP polling of the Solis S2-WL-ST logger (function 04 only) with inverter entities on a separate device.

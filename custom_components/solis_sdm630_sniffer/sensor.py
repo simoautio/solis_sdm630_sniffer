@@ -77,9 +77,9 @@ INVERTER_DESCRIPTIONS = (
     *(
         _inverter_description(key, name, unit, device_class, state_class, False)
         for key, name, unit, device_class, state_class in (
-            ("pv1_power", "PV 1 power", "W", "power", "measurement"),
-            ("pv2_power", "PV 2 power", "W", "power", "measurement"),
-            ("solar_ac_power", "Solar AC power", "W", "power", "measurement"),
+            ("pv1_power", "PV1 power", "W", "power", "measurement"),
+            ("pv2_power", "PV2 power", "W", "power", "measurement"),
+            ("solar_ac_power", "Solar power", "W", "power", "measurement"),
             ("household_power", "Household power", "W", "power", "measurement"),
             (
                 "estimated_solar_energy",
@@ -235,4 +235,4 @@ class BalanceStatusSensor(InverterSensor):
 
     @property
     def available(self) -> bool:
-        return self._logger._running
+        return self._logger.running

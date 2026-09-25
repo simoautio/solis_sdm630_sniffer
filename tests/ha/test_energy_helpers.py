@@ -21,6 +21,15 @@ from custom_components.solis_sdm630_sniffer.utility_meters import (
 )
 
 
+async def open_options(hass, entry, step):
+    """Open Configure and choose one menu page."""
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert menu["type"] == FlowResultType.MENU
+    return await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": step}
+    )
+
+
 @pytest.fixture
 def energy_entry(hass):
     entry = MockConfigEntry(
@@ -177,52 +186,44 @@ async def test_validate_both_sources_before_creating(hass, energy_entry):
 
 
 async def test_options_sign_and_one_time_helper_action(hass, energy_entry):
-    result = await hass.config_entries.options.async_init(energy_entry.entry_id)
-    with patch(
-        "custom_components.solis_sdm630_sniffer.config_flow.async_create_utility_meters",
-        return_value=6,
-    ) as create:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            user_input={
-                "timeout": 90,
-                "grid_import_sign": "negative",
-                "create_utility_meters": True,
-            },
-        )
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        create.assert_awaited_once_with(
-            hass,
-            energy_entry,
-            cycles=("daily", "monthly", "yearly"),
-            source_keys=("import", "export"),
-        )
+    result = await open_options(hass, energy_entry, "meter")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"timeout": 90, "grid_import_sign": "negative"}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert energy_entry.options == {
         "timeout": 90,
         "grid_import_sign": "negative",
         "update_interval": 30,
     }
-    result = await hass.config_entries.options.async_init(energy_entry.entry_id)
+    result = await open_options(hass, energy_entry, "utility_meters")
     with patch(
-        "custom_components.solis_sdm630_sniffer.config_flow.async_create_utility_meters"
+        "custom_components.solis_sdm630_sniffer.config_flow.async_create_utility_meters",
+        return_value=2,
     ) as create:
-        await hass.config_entries.options.async_configure(
+        result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"timeout": 120, "grid_import_sign": "negative"},
+            user_input={
+                "utility_meter_cycles": ["hourly"],
+                "utility_meter_sources": ["import", "export"],
+            },
         )
-        create.assert_not_called()
-    assert energy_entry.options["grid_import_sign"] == "negative"
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        create.assert_awaited_once_with(
+            hass, energy_entry, cycles=("hourly",), source_keys=("import", "export")
+        )
+    # The action is not persisted: reloads never recreate deleted helpers.
+    assert energy_entry.options == {
+        "timeout": 90,
+        "grid_import_sign": "negative",
+        "update_interval": 30,
+    }
 
 
 async def test_options_helper_error_is_retryable(hass, energy_entry):
-    result = await hass.config_entries.options.async_init(energy_entry.entry_id)
+    result = await open_options(hass, energy_entry, "utility_meters")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            "timeout": 60,
-            "grid_import_sign": "negative",
-            "create_utility_meters": True,
-        },
+        result["flow_id"], user_input={}
     )
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"base": "sources_not_ready"}

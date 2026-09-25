@@ -29,6 +29,11 @@ from .modbus_tcp import ModbusError, ModbusReader, UnsupportedRegisters
 _LOGGER = logging.getLogger(__name__)
 
 
+def energy_store(hass, entry_id) -> Store:
+    """Persisted estimated-energy totals for one config entry."""
+    return Store(hass, 1, f"{DOMAIN}.{entry_id}.energy")
+
+
 class LoggerRuntime:
     """Own logger samples without coupling meter availability to logger failures."""
 
@@ -46,7 +51,7 @@ class LoggerRuntime:
         self.updated_at = {}
         self.listeners: set[Callable[[], None]] = set()
         self.solar, self.household = EnergyEstimate(), EnergyEstimate()
-        self.store = Store(hass, 1, f"{DOMAIN}.{entry_id}.energy")
+        self.store = energy_store(hass, entry_id)
         self.failures = 0
         self.last_error = None
         self.balance_status = "waiting_for_sources"
@@ -91,6 +96,10 @@ class LoggerRuntime:
 
     def _stored_data(self):
         return {"solar": self.solar.total, "household": self.household.total}
+
+    @property
+    def running(self) -> bool:
+        return self._running
 
     def async_add_listener(self, listener):
         self.listeners.add(listener)
@@ -159,7 +168,7 @@ class LoggerRuntime:
             async with ModbusReader(self.host, self.port, self.unit) as client:
                 for start, count in BLOCKS:
                     await self._read_block(client, start, count, values, stamps)
-                    if start == 33000 and values.get("model") != 0x3306:
+                    if start == 33000 and values.get("model") != "0x3306":
                         raise ModbusError("Unsupported inverter model")
             if not self._running:
                 return

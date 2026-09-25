@@ -33,6 +33,7 @@ class InverterRegister:
     device_class: str | None = None
     state_class: str | None = "measurement"
     diagnostic: bool = False
+    hex: bool = False  # Codes and bit fields read better as 0x0000.
 
     def decode(self, words: tuple[int, ...]) -> float | int | str:
         if len(words) != self.count:
@@ -44,15 +45,38 @@ class InverterRegister:
             value -= 1 << (self.count * 16)
         if self.key == "status":
             return STATUS.get(value, f"Unknown (0x{value:04X})")
+        if self.hex:
+            return f"0x{value:04X}"
         return value * self.scale
 
 
 R = InverterRegister
 REGISTERS = (
-    R("model", "Model code", 33000, state_class=None, diagnostic=True),
-    R("dsp_version", "DSP version code", 33001, state_class=None, diagnostic=True),
-    R("hmi_version", "HMI version code", 33002, state_class=None, diagnostic=True),
-    R("protocol_version", "Protocol version", 33003, state_class=None, diagnostic=True),
+    R("model", "Model code", 33000, state_class=None, diagnostic=True, hex=True),
+    R(
+        "dsp_version",
+        "DSP version code",
+        33001,
+        state_class=None,
+        diagnostic=True,
+        hex=True,
+    ),
+    R(
+        "hmi_version",
+        "HMI version code",
+        33002,
+        state_class=None,
+        diagnostic=True,
+        hex=True,
+    ),
+    R(
+        "protocol_version",
+        "Protocol version",
+        33003,
+        state_class=None,
+        diagnostic=True,
+        hex=True,
+    ),
     R(
         "production_total",
         "PV production total",
@@ -119,7 +143,7 @@ REGISTERS = (
     *(
         R(
             f"pv{phase}_{kind}",
-            f"PV {phase} {kind}",
+            f"PV{phase} {kind}",
             33049 + (phase - 1) * 2 + offset,
             scale=0.1,
             unit=unit,
@@ -132,7 +156,7 @@ REGISTERS = (
     *(
         R(
             f"ac_{kind}_{phase}",
-            f"AC {kind} phase {phase}",
+            f"L{phase} {kind}",
             base + phase - 1,
             scale=0.1,
             unit=unit,
@@ -143,7 +167,7 @@ REGISTERS = (
     ),
     R(
         "inverting_power",
-        "Internal inverting power",
+        "Active power",
         33079,
         2,
         signed=True,
@@ -169,7 +193,7 @@ REGISTERS = (
     ),
     R(
         "temperature",
-        "Inverter temperature",
+        "Temperature",
         33093,
         scale=0.1,
         signed=True,
@@ -184,29 +208,29 @@ REGISTERS = (
         unit="Hz",
         device_class="frequency",
     ),
-    R("status", "Operating status", 33095, state_class=None),
+    R("status", "Status", 33095, state_class=None),
     *(
-        R(key, name, address, state_class=None, diagnostic=True)
+        R(key, name, address, state_class=None, diagnostic=True, hex=True)
         for key, name, address in (
             ("grid_faults", "Grid fault bits", 33116),
             ("backup_faults", "Backup fault bits", 33117),
-            ("inverter_faults_1", "Inverter fault bits 1", 33119),
-            ("inverter_faults_2", "Inverter fault bits 2", 33120),
+            ("inverter_faults_1", "Fault bits 1", 33119),
+            ("inverter_faults_2", "Fault bits 2", 33120),
             ("operating_bits", "Operating status bits", 33121),
         )
     ),
     R(
         "reported_household_power",
-        "Inverter-reported household power",
+        "Reported household power",
         33147,
         unit="W",
         device_class="power",
         diagnostic=True,
     ),
-    R("backup_power", "Backup output power", 33148, unit="W", device_class="power"),
+    R("backup_power", "Backup power", 33148, unit="W", device_class="power"),
     R(
         "ac_grid_power",
-        "AC grid-port power",
+        "Grid port power",
         33151,
         2,
         signed=True,
@@ -215,7 +239,7 @@ REGISTERS = (
     ),
     R(
         "reported_import_total",
-        "Inverter-reported import energy",
+        "Reported grid import energy",
         33169,
         2,
         unit="kWh",
@@ -225,7 +249,7 @@ REGISTERS = (
     ),
     R(
         "reported_export_total",
-        "Inverter-reported export energy",
+        "Reported grid export energy",
         33173,
         2,
         unit="kWh",
@@ -235,7 +259,7 @@ REGISTERS = (
     ),
     R(
         "reported_household_total",
-        "Inverter-reported household energy",
+        "Reported household energy",
         33580,
         2,
         unit="kWh",
@@ -245,7 +269,7 @@ REGISTERS = (
     ),
     R(
         "reported_grid_power",
-        "Inverter-reported meter power",
+        "Reported grid power",
         33263,
         2,
         signed=True,

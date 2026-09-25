@@ -158,6 +158,9 @@ async def test_setup_independence_restore_and_redaction(
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
     assert hass_storage[key]["data"] == {"solar": 5, "household": 7}
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert key not in hass_storage
 
 
 async def test_no_logger_entities_without_host(hass, mqtt_transport):

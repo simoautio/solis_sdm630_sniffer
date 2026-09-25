@@ -13,7 +13,6 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_CREATE_UTILITY_METERS,
     CONF_GRID_IMPORT_SIGN,
     CONF_LOGGER_HOST,
     CONF_LOGGER_INTERVAL,
@@ -99,6 +98,10 @@ def _logger_options(user_input: dict, current: dict, errors: dict) -> dict:
     return options
 
 
+def _host_schema(host: str | None) -> dict:
+    return {vol.Optional(CONF_LOGGER_HOST, description={"suggested_value": host}): str}
+
+
 def _multi_select(key: str, options, default) -> dict:
     return {
         vol.Optional(key, default=list(default)): selector.SelectSelector(
@@ -145,11 +148,14 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_TIMEOUT] = "invalid_timeout"
             if not _valid_seconds(user_input[CONF_UPDATE_INTERVAL]):
                 errors[CONF_UPDATE_INTERVAL] = "invalid_update_interval"
+            # Logger settings live in options, where Configure can change them.
+            logger = _logger_options(user_input, {}, errors)
+            user_input.pop(CONF_LOGGER_HOST, None)
             if not errors:
                 await self.async_set_unique_id(topic)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="Solis SDM630 Sniffer", data=user_input
+                    title="Solis SDM630 Sniffer", data=user_input, options=logger
                 )
         defaults = user_input or {}
         return self.async_show_form(
@@ -165,6 +171,7 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
                         defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
                         CONF_UPDATE_INTERVAL,
                     ),
+                    **_host_schema(defaults.get(CONF_LOGGER_HOST)),
                 }
             ),
             errors=errors,
@@ -178,11 +185,28 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SnifferOptionsFlow(OptionsFlow):
-    """Configure power direction, availability, and optional energy helpers."""
+    """Configure the meter, the optional logger, and one-time energy helpers."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        return self.async_show_menu(
+            step_id="init", menu_options=["meter", "logger", "utility_meters"]
+        )
+
+    def _save(self, changes: dict, keep_logger: bool = True) -> FlowResult:
+        options = {
+            key: value
+            for key, value in self.config_entry.options.items()
+            if keep_logger or not key.startswith("logger_")
+        }
+        options.update(changes)
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Availability, publishing cadence and grid power direction."""
         errors = {}
         default_sign = self.config_entry.options.get(
             CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN
@@ -200,38 +224,14 @@ class SnifferOptionsFlow(OptionsFlow):
                 errors[CONF_TIMEOUT] = "invalid_timeout"
             if sign not in ("positive", "negative"):
                 errors[CONF_GRID_IMPORT_SIGN] = "invalid_direction"
-            logger = _logger_options(user_input, self.config_entry.options, errors)
-            cycles = user_input.get(CONF_UTILITY_CYCLES, DEFAULT_CYCLES)
-            sources = user_input.get(CONF_UTILITY_SOURCES, DEFAULT_SOURCES)
-            if not set(cycles) <= set(CYCLES) or not set(sources) <= set(SOURCES):
-                errors["base"] = "invalid_helper_selection"
-            if not errors and user_input.get(CONF_CREATE_UTILITY_METERS, False):
-                try:
-                    await async_create_utility_meters(
-                        self.hass,
-                        self.config_entry,
-                        cycles=tuple(cycles),
-                        source_keys=tuple(sources),
-                    )
-                except UtilityMeterSetupError as err:
-                    errors["base"] = str(err)
             if not errors:
-                # Creating helpers is a one-time action, not a persistent startup
-                # instruction. Future reloads must not recreate user-deleted helpers.
-                options = {
-                    key: value
-                    for key, value in self.config_entry.options.items()
-                    if not key.startswith("logger_")
-                }
-                options.update(logger)
-                options.update(
+                return self._save(
                     {
                         CONF_TIMEOUT: user_input[CONF_TIMEOUT],
                         CONF_UPDATE_INTERVAL: interval,
                         CONF_GRID_IMPORT_SIGN: sign,
                     }
                 )
-                return self.async_create_entry(title="", data=options)
         default = self.config_entry.options.get(
             CONF_TIMEOUT, self.config_entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
         )
@@ -247,35 +247,81 @@ class SnifferOptionsFlow(OptionsFlow):
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            vol.Optional(
-                CONF_LOGGER_HOST,
-                description={
-                    "suggested_value": self.config_entry.options.get(CONF_LOGGER_HOST)
-                },
-            ): str,
+        }
+        return self.async_show_form(
+            step_id="meter",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input
+            ),
+            errors=errors,
+        )
+
+    async def async_step_logger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Optional read-only logger; an empty host disables polling."""
+        errors = {}
+        current = self.config_entry.options
+        if user_input is not None:
+            logger = _logger_options(user_input, current, errors)
+            if not errors:
+                return self._save(logger, keep_logger=False)
+        schema = {
+            **_host_schema(current.get(CONF_LOGGER_HOST)),
             **{
-                vol.Optional(
-                    key, default=self.config_entry.options.get(key, default)
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=minimum,
-                        max=maximum,
-                        step=1,
-                        mode=selector.NumberSelectorMode.BOX,
+                vol.Optional(key, default=current.get(key, default)): (
+                    selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=minimum,
+                            max=maximum,
+                            step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     )
                 )
                 for key, minimum, maximum, default in _LOGGER_NUMBERS
             },
-            vol.Optional(
-                CONF_CREATE_UTILITY_METERS, default=False
-            ): selector.BooleanSelector(),
-            **_multi_select(CONF_UTILITY_CYCLES, CYCLES, DEFAULT_CYCLES),
-            **_multi_select(CONF_UTILITY_SOURCES, SOURCES, DEFAULT_SOURCES),
         }
         return self.async_show_form(
-            step_id="init",
+            step_id="logger",
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(schema), user_input
+            ),
+            errors=errors,
+        )
+
+    async def async_step_utility_meters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Create missing helpers once; nothing is stored for future startups."""
+        errors = {}
+        if user_input is not None:
+            cycles = user_input.get(CONF_UTILITY_CYCLES, DEFAULT_CYCLES)
+            sources = user_input.get(CONF_UTILITY_SOURCES, DEFAULT_SOURCES)
+            if not set(cycles) <= set(CYCLES) or not set(sources) <= set(SOURCES):
+                errors["base"] = "invalid_helper_selection"
+            else:
+                try:
+                    await async_create_utility_meters(
+                        self.hass,
+                        self.config_entry,
+                        cycles=tuple(cycles),
+                        source_keys=tuple(sources),
+                    )
+                except UtilityMeterSetupError as err:
+                    errors["base"] = str(err)
+                else:
+                    return self._save({})
+        return self.async_show_form(
+            step_id="utility_meters",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(
+                    {
+                        **_multi_select(CONF_UTILITY_CYCLES, CYCLES, DEFAULT_CYCLES),
+                        **_multi_select(CONF_UTILITY_SOURCES, SOURCES, DEFAULT_SOURCES),
+                    }
+                ),
+                user_input,
             ),
             errors=errors,
         )

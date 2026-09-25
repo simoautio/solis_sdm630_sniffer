@@ -24,7 +24,7 @@ On your **Home Assistant machine**:
 3. Find **Solis SDM630 Sniffer** and download it.
 4. Restart Home Assistant.
 5. Go to **Settings → Devices & services → Add integration → Solis SDM630 Sniffer**.
-6. Enter the MQTT topic, availability timeout (default **60 seconds**), and update interval (default **30 seconds**).
+6. Enter the MQTT topic, availability timeout (default **60 seconds**), update interval (default **30 seconds**) and, optionally, the Solis logger's IP address (see [Local inverter](#local-inverter-optional)).
 
 This is a HACS **custom repository**, not a listing in HACS's default catalog. No Home Assistant installation is needed on the computer used to clone or develop this repository.
 
@@ -90,7 +90,7 @@ Device classes match the physical quantities. The meter map follows the [Eastron
 
 ## Availability and configuration
 
-Use **Configure** on the integration to change the power sign, optionally create utility meters, or change the availability timeout and update interval, each from **1 to 86400 seconds**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
+**Configure** on the integration opens a menu: **Meter** (power sign, availability timeout and update interval, each from **1 to 86400 seconds**), **Inverter logger**, and **Create utility meters**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
 
 **Update interval** defaults to **30 seconds**, including existing installations without a saved setting. The integration still decodes every incoming MQTT message, but publishes only the latest readings at each interval. Dashboard values, automations, and Home Assistant history therefore update less often. Samples are not averaged, and intermediate readings are not replayed. Unchanged values need no new publication. Home Assistant manages history storage; this setting does not change Recorder configuration or the inverter’s polling rate.
 
@@ -106,7 +106,7 @@ Choose a timeout longer than the slowest register polling interval you want to o
 
 Version 0.2 adds **Grid import power** and **Grid export power** in W. Both use the meter's signed **Total active power**, and only the active direction has a nonzero value.
 
-Open **Settings → Devices & services → Solis SDM630 Sniffer → Configure** and set **Power sign for grid import**:
+Open **Settings → Devices & services → Solis SDM630 Sniffer → Configure → Meter** and set **Power sign for grid import**:
 
 | Setting | Meter reading | Grid import power | Grid export power |
 | --- | --- | --- | --- |
@@ -119,7 +119,7 @@ You can change this setting at any time. It applies to these two power sensors o
 
 ### Utility meters
 
-In the same **Configure** screen, select **Create utility meters**, choose the **cycles** (quarter-hourly, hourly, daily, monthly, yearly; default daily/monthly/yearly) and **sources** (meter import/export by default; Estimated solar/household energy when the logger is configured), then save. The defaults create six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
+Open **Configure → Create utility meters**, choose the **cycles** (quarter-hourly, hourly, daily, monthly, yearly; default daily/monthly/yearly) and **sources** (meter import/export by default; Estimated solar/household energy when the logger is configured), then save. The defaults create six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
 
 | Helpers | Source |
 | --- | --- |
@@ -128,7 +128,7 @@ In the same **Configure** screen, select **Create utility meters**, choose the *
 
 These are measured-energy totals from the meter's kWh counters, not estimates from sampled power. Both source entities must be enabled. Entity IDs are looked up in Home Assistant's registry, so renamed sensors work too.
 
-The checkbox is a **one-time action** and clears after saving. Selecting it again reuses matching source/cycle helpers created through the UI (including by this action). YAML-defined utility meters are not detected; if you already use them, keep those and leave this checkbox off. It does not reset totals, recreate helpers on startup, or overwrite helpers you have customized. A retry after partial failure creates only the missing matching helpers. If you have existing helpers with different tariffs, offsets, or counter handling, those remain separate.
+Submitting the page is a **one-time action**; nothing is stored for future startups. Submitting again reuses matching source/cycle helpers created through the UI (including by this action). YAML-defined utility meters are not detected; if you already use them, keep those and don't use this page. It does not reset totals, recreate helpers on startup, or overwrite helpers you have customized. A retry after partial failure creates only the missing matching helpers. If you have existing helpers with different tariffs, offsets, or counter handling, those remain separate.
 
 Find the created helpers under **Settings → Devices & services → Helpers**. They preserve their totals through restarts and use Home Assistant's local calendar for resets. The initial day/month/year is incomplete: accounting starts when the helper is created, with no historical backfill. Previous-period totals are exposed by the built-in helper. Sources are treated as lifetime counters with **Periodically resetting** disabled, so cumulative changes can be recovered after a temporary source outage. Negative counter corrections are not counted as negative consumption.
 
@@ -152,7 +152,7 @@ With a battery, configure its charge/discharge sources separately before interpr
 
 ## Local inverter (optional)
 
-Enter the S2-WL-ST logger's IP address in **Configure → Logger IP address or hostname** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
+Enter the S2-WL-ST logger's IP address when adding the integration, or later in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
 
 - **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and logger settings and SolisCloud reporting are not changed. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
 - Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: ModbusError` in diagnostics and stay unavailable.
@@ -161,16 +161,16 @@ Enter the S2-WL-ST logger's IP address in **Configure → Logger IP address or h
 
 | Entity | Source |
 | --- | --- |
-| PV DC power, PV 1/2 voltage/current/power | Inverter registers (PV power = V × I) |
-| AC voltage/current per phase, frequency, temperature, reactive/apparent power, internal inverting power, AC grid-port power, backup output power | Inverter registers |
+| PV DC power, PV1/PV2 voltage/current/power | Inverter registers (PV power = V × I) |
+| L1/L2/L3 voltage and current, frequency, temperature, active/reactive/apparent power, grid port power, backup power | Inverter registers |
 | PV production today / this month / this year / total (and previous periods) | Native inverter counters. **PV production total has 1 kWh resolution.** |
-| Operating status, fault/status bits, model/firmware codes, inverter-reported meter/household values | Diagnostic |
-| **Solar AC power** | AC grid-port power + backup output power, never negative |
+| Status; fault/status bits and model/firmware codes (shown as hex, e.g. `0x3306`); reported grid power, grid import/export and household values as seen by the inverter | Diagnostic |
+| **Solar power** | Grid port power + backup power, never negative |
 | **Household power** | Inverter AC delivery + net grid power (import positive, export negative). Needs a fresh meter sample within 5 s of the logger sample; otherwise unavailable. |
 | **Estimated solar / household energy** (kWh) | Trapezoidal integration of the two power values. Persisted across restarts; gaps, outages and restarts are **not** bridged, so these are lower bounds. |
 | Household balance status | Why household power is or isn't available (`ok`, `meter_unavailable`, `unaligned_samples`, …) |
 
-For the Energy dashboard, keep the meter's **Import/Export energy** for the grid. For solar, use **either** the native **PV production total** (coarse but authoritative across outages) **or** **Estimated solar energy** (smooth, but misses outages) — never both. The inverter-reported import/export counters are diagnostics only; the meter is authoritative for grid energy.
+For the Energy dashboard, keep the meter's **Import/Export energy** for the grid. For solar, use **either** the native **PV production total** (coarse but authoritative across outages) **or** **Estimated solar energy** (smooth, but misses outages) — never both. The **Reported grid import/export energy** counters are diagnostics only; the meter is authoritative for grid energy.
 
 ## Diagnostics and troubleshooting
 

@@ -113,6 +113,8 @@ def test_profile_scaling_and_signedness():
     assert by_key["production_today"].decode((19,)) == pytest.approx(1.9)
     assert by_key["production_total"].decode((1, 2)) == 65538
     assert by_key["status"].decode((0x2011,)) == "Meter communication failure"
+    assert by_key["model"].decode((0x3306,)) == "0x3306"
+    assert by_key["grid_faults"].decode((0x10,)) == "0x0010"
     assert by_key["status"].decode((0xABCD,)) == "Unknown (0xABCD)"
     assert not any(
         item.key.startswith(("pv3", "pv4", "battery")) for item in mod.REGISTERS

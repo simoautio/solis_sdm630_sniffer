@@ -18,6 +18,15 @@ from custom_components.solis_sdm630_sniffer.diagnostics import (
 from custom_components.solis_sdm630_sniffer.runtime import SnifferRuntime
 
 
+async def open_options(hass, entry, step):
+    """Open Configure and choose one menu page."""
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert menu["type"] == FlowResultType.MENU
+    return await hass.config_entries.options.async_configure(
+        menu["flow_id"], {"next_step_id": step}
+    )
+
+
 async def test_defaults_and_create(hass, mqtt_transport):
     flow = SnifferConfigFlow()
     flow.hass = hass
@@ -33,6 +42,36 @@ async def test_defaults_and_create(hass, mqtt_transport):
     result = await flow.async_step_user({"topic": "solis/rs485/raw", "timeout": 60})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["topic"] == "solis/rs485/raw"
+
+
+SKIP_SETUP = "custom_components.solis_sdm630_sniffer.async_setup_entry"
+
+
+async def test_setup_with_optional_logger(hass, mqtt_transport):
+    with patch(SKIP_SETUP, return_value=True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": "user"},
+            data={"topic": "t", "timeout": 60, "logger_host": "192.168.1.135"},
+        )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert "logger_host" not in result["data"]
+    assert result["options"]["logger_host"] == "192.168.1.135"
+    assert result["options"]["logger_port"] == 502
+
+
+async def test_setup_rejects_invalid_logger_and_allows_none(hass, mqtt_transport):
+    flow = SnifferConfigFlow()
+    flow.hass = hass
+    result = await flow.async_step_user(
+        {"topic": "t", "timeout": 60, "logger_host": "http://x/"}
+    )
+    assert result["errors"] == {"logger_host": "invalid_logger"}
+    with patch(SKIP_SETUP, return_value=True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}, data={"topic": "t", "timeout": 60}
+        )
+    assert result["options"] == {}
 
 
 @pytest.mark.parametrize("topic", ["", "a/#", "a/+", "a\0b"])
@@ -81,9 +120,9 @@ def test_invalid_logger_options(field, value):
 async def test_invalid_logger_host_is_retryable(hass):
     entry = MockConfigEntry(domain=DOMAIN, data={"topic": "test", "timeout": 60})
     entry.add_to_hass(hass)
-    form = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await open_options(hass, entry, "logger")
     result = await hass.config_entries.options.async_configure(
-        form["flow_id"], user_input={"timeout": 60, "logger_host": "http://x/"}
+        form["flow_id"], user_input={"logger_host": "http://x/"}
     )
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"logger_host": "invalid_logger"}
@@ -103,18 +142,23 @@ async def test_logger_options_preserve_meter_settings(hass):
         options={"grid_import_sign": "negative"},
     )
     entry.add_to_hass(hass)
-    form = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await open_options(hass, entry, "logger")
     result = await hass.config_entries.options.async_configure(
-        form["flow_id"], user_input={"timeout": 60, "logger_host": "192.168.1.135"}
+        form["flow_id"], user_input={"logger_host": "192.168.1.135"}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options["logger_port"] == 502
     assert entry.options["logger_unit"] == 1
     assert entry.options["logger_interval"] == 30
     assert entry.options["grid_import_sign"] == "negative"
-    form = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await open_options(hass, entry, "meter")
     await hass.config_entries.options.async_configure(
-        form["flow_id"], user_input={"timeout": 60, "logger_host": ""}
+        form["flow_id"], user_input={"timeout": 90}
+    )
+    assert entry.options["logger_host"] == "192.168.1.135"
+    form = await open_options(hass, entry, "logger")
+    await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={"logger_host": ""}
     )
     assert not any(key.startswith("logger_") for key in entry.options)
 
@@ -135,7 +179,7 @@ async def test_duplicate_topic(hass, mqtt_transport):
 async def test_options(hass, mqtt_transport):
     entry = MockConfigEntry(domain=DOMAIN, data={"topic": "test", "timeout": 60})
     entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_options(hass, entry, "meter")
     assert result["type"] == FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"timeout": 120}
@@ -175,7 +219,7 @@ async def test_update_interval_options(hass, mqtt_transport):
         domain=DOMAIN, data={"topic": "test", "timeout": 60, "update_interval": 15}
     )
     entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await open_options(hass, entry, "meter")
     assert result["data_schema"]({})["update_interval"] == 15
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={"timeout": 60, "update_interval": 86400}
