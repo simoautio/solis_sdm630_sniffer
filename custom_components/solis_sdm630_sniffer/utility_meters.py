@@ -15,14 +15,28 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 _LOCK_KEY = f"{DOMAIN}.utility_meter_creation_lock"
-_CYCLES = ("daily", "monthly", "yearly")
+CYCLES = ("quarter-hourly", "hourly", "daily", "monthly", "yearly")
+DEFAULT_CYCLES = ("daily", "monthly", "yearly")
+# Source key -> unique-id suffix. Estimated sources exist only with a logger.
+SOURCES = {
+    "import": "72",
+    "export": "74",
+    "solar": "inverter_estimated_solar_energy",
+    "household": "inverter_estimated_household_energy",
+}
+DEFAULT_SOURCES = ("import", "export")
 
 
 class UtilityMeterSetupError(HomeAssistantError):
     """A user-visible, retryable error during requested helper creation."""
 
 
-async def async_create_utility_meters(hass: HomeAssistant, entry: ConfigEntry) -> int:
+async def async_create_utility_meters(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    cycles=DEFAULT_CYCLES,
+    source_keys=DEFAULT_SOURCES,
+) -> int:
     """Create missing helpers without altering existing counters or helper history.
 
     Use the built-in config flow so source tracking, persistence, calendar resets,
@@ -34,9 +48,9 @@ async def async_create_utility_meters(hass: HomeAssistant, entry: ConfigEntry) -
         sources = []
         # Validate every source before creating any helpers. Never guess entity IDs:
         # users may have renamed them, or have multiple meter entries.
-        for address, direction in ((72, "import"), (74, "export")):
+        for direction in source_keys:
             entity_id = registry.async_get_entity_id(
-                "sensor", DOMAIN, f"{entry.entry_id}_{address}"
+                "sensor", DOMAIN, f"{entry.entry_id}_{SOURCES[direction]}"
             )
             source = registry.async_get(entity_id) if entity_id else None
             if source is None or source.disabled_by is not None:
@@ -45,7 +59,7 @@ async def async_create_utility_meters(hass: HomeAssistant, entry: ConfigEntry) -
 
         created = 0
         for source, direction in sources:
-            for cycle in _CYCLES:
+            for cycle in cycles:
                 options = {
                     "name": f"{entry.title} {direction} energy {cycle}",
                     "source": source.entity_id,

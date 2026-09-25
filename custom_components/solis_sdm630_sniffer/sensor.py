@@ -8,6 +8,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -15,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import SnifferConfigEntry
 from .const import CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN, DOMAIN
 from .energy import split_grid_power
+from .inverter_registers import REGISTERS as INVERTER_REGISTERS
 from .registers import REGISTERS
 
 PARALLEL_UPDATES = 0
@@ -54,6 +56,60 @@ GRID_DESCRIPTIONS = tuple(
 )
 
 
+def _inverter_description(key, name, unit, device_class, state_class, diagnostic):
+    return SensorEntityDescription(
+        key=key,
+        name=name,
+        native_unit_of_measurement=unit,
+        device_class=SensorDeviceClass(device_class) if device_class else None,
+        state_class=SensorStateClass(state_class) if state_class else None,
+        entity_category=EntityCategory.DIAGNOSTIC if diagnostic else None,
+    )
+
+
+INVERTER_DESCRIPTIONS = (
+    *(
+        _inverter_description(
+            r.key, r.name, r.unit, r.device_class, r.state_class, r.diagnostic
+        )
+        for r in INVERTER_REGISTERS
+    ),
+    *(
+        _inverter_description(key, name, unit, device_class, state_class, False)
+        for key, name, unit, device_class, state_class in (
+            ("pv1_power", "PV 1 power", "W", "power", "measurement"),
+            ("pv2_power", "PV 2 power", "W", "power", "measurement"),
+            ("solar_ac_power", "Solar AC power", "W", "power", "measurement"),
+            ("household_power", "Household power", "W", "power", "measurement"),
+            (
+                "estimated_solar_energy",
+                "Estimated solar energy",
+                "kWh",
+                "energy",
+                "total_increasing",
+            ),
+            (
+                "estimated_household_energy",
+                "Estimated household energy",
+                "kWh",
+                "energy",
+                "total_increasing",
+            ),
+        )
+    ),
+)
+
+BALANCE_STATUSES = [
+    "waiting_for_sources",
+    "ok",
+    "meter_unavailable",
+    "unaligned_samples",
+    "inverter_output_unavailable",
+    "negative_household_balance",
+    "logger_unavailable",
+]
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SnifferConfigEntry,
@@ -64,6 +120,13 @@ async def async_setup_entry(
         SnifferSensor(entry, description)
         for description in (*DESCRIPTIONS, *GRID_DESCRIPTIONS)
     )
+    if entry.runtime_data.logger:
+        async_add_entities(
+            [
+                *(InverterSensor(entry, item) for item in INVERTER_DESCRIPTIONS),
+                BalanceStatusSensor(entry),
+            ]
+        )
 
 
 class SnifferSensor(SensorEntity):
@@ -116,3 +179,60 @@ class SnifferSensor(SensorEntity):
         self.async_on_remove(
             self._runtime.async_add_listener(self.async_write_ha_state)
         )
+
+
+class InverterSensor(SensorEntity):
+    """One read-only logger reading or a value derived from fresh sources."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(
+        self, entry: SnifferConfigEntry, description: SensorEntityDescription
+    ) -> None:
+        self.entity_description = description
+        self._logger = entry.runtime_data.logger
+        self._attr_unique_id = f"{entry.entry_id}_inverter_{description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_inverter")},
+            name="Solis inverter",
+            manufacturer="Solis",
+            model="S6-EH3P10K-H (read-only Modbus TCP)",
+        )
+
+    @property
+    def native_value(self) -> float | str | None:
+        return self._logger.values.get(self.entity_description.key)
+
+    @property
+    def available(self) -> bool:
+        return self._logger.is_available(self.entity_description.key)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._logger.async_add_listener(self.async_write_ha_state))
+
+
+class BalanceStatusSensor(InverterSensor):
+    """Why household power is or is not currently calculated."""
+
+    def __init__(self, entry: SnifferConfigEntry) -> None:
+        super().__init__(
+            entry,
+            SensorEntityDescription(
+                key="balance_status",
+                translation_key="balance_status",
+                name="Household balance status",
+                device_class=SensorDeviceClass.ENUM,
+                options=BALANCE_STATUSES,
+                entity_category=EntityCategory.DIAGNOSTIC,
+            ),
+        )
+
+    @property
+    def native_value(self) -> str:
+        return self._logger.balance_status
+
+    @property
+    def available(self) -> bool:
+        return self._logger._running

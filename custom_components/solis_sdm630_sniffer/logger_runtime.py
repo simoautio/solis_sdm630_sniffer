@@ -10,6 +10,18 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
+from .const import (
+    CONF_GRID_IMPORT_SIGN,
+    CONF_LOGGER_HOST,
+    CONF_LOGGER_INTERVAL,
+    CONF_LOGGER_PORT,
+    CONF_LOGGER_UNIT,
+    DEFAULT_GRID_IMPORT_SIGN,
+    DEFAULT_LOGGER_INTERVAL,
+    DEFAULT_LOGGER_PORT,
+    DEFAULT_LOGGER_UNIT,
+    DOMAIN,
+)
 from .energy import EnergyEstimate, combined_power
 from .inverter_registers import BLOCKS, REGISTERS
 from .modbus_tcp import ModbusError, ModbusReader, UnsupportedRegisters
@@ -22,17 +34,19 @@ class LoggerRuntime:
 
     def __init__(self, hass, meter, entry_id, options):
         self.hass, self.meter = hass, meter
-        self.host = options["logger_host"]
-        self.port = int(options.get("logger_port", 502))
-        self.unit = int(options.get("logger_unit", 1))
-        self.interval = float(options.get("logger_interval", 30))
-        self.import_sign = options.get("grid_import_sign", "positive")
+        self.host = options[CONF_LOGGER_HOST]
+        self.port = int(options.get(CONF_LOGGER_PORT, DEFAULT_LOGGER_PORT))
+        self.unit = int(options.get(CONF_LOGGER_UNIT, DEFAULT_LOGGER_UNIT))
+        self.interval = float(
+            options.get(CONF_LOGGER_INTERVAL, DEFAULT_LOGGER_INTERVAL)
+        )
+        self.import_sign = options.get(CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN)
         self.clock = monotonic
         self.values = {}
         self.updated_at = {}
         self.listeners: set[Callable[[], None]] = set()
         self.solar, self.household = EnergyEstimate(), EnergyEstimate()
-        self.store = Store(hass, 1, f"solis_sdm630_sniffer.{entry_id}.energy")
+        self.store = Store(hass, 1, f"{DOMAIN}.{entry_id}.energy")
         self.failures = 0
         self.last_error = None
         self.balance_status = "waiting_for_sources"
@@ -43,6 +57,7 @@ class LoggerRuntime:
         self._remove_meter_listener = None
         self._task = None
         self._running = False
+        self._loaded = False
 
     async def async_start(self):
         data = await self.store.async_load() or {}
@@ -50,6 +65,7 @@ class LoggerRuntime:
             value = data.get(key, 0)
             if isinstance(value, (int, float)):
                 counter.total = EnergyEstimate(value).total
+        self._loaded = True
         self._running = True
         self._remove_meter_listener = self.meter.async_add_listener(self._meter_changed)
         self._schedule(0)
@@ -69,7 +85,8 @@ class LoggerRuntime:
             with suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
-        await self.store.async_save(self._stored_data())
+        if self._loaded:  # Never overwrite totals that failed to load.
+            await self.store.async_save(self._stored_data())
         self.listeners.clear()
 
     def _stored_data(self):

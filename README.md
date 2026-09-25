@@ -4,7 +4,7 @@
 
 A Home Assistant custom integration that **passively reads Eastron SDM630MCT meter traffic** captured by a PUSR USR-DR134 serial-to-MQTT gateway. Intended for an existing Solis-to-meter RS485 link.
 
-The integration subscribes to raw binary MQTT messages and creates native sensors. It **never publishes MQTT messages, sends Modbus requests, or changes the meter**. Home Assistant's shared MQTT integration can independently publish its own birth/status messages.
+The integration subscribes to raw binary MQTT messages and creates native sensors. The meter sniffer **never publishes MQTT messages, sends Modbus requests, or changes the meter**. Optionally, it can also [read the Solis inverter through its S2-WL-ST logger](#local-inverter-optional), read-only. Home Assistant's shared MQTT integration can independently publish its own birth/status messages.
 
 ## Requirements
 
@@ -117,9 +117,9 @@ Open **Settings → Devices & services → Solis SDM630 Sniffer → Configure** 
 
 You can change this setting at any time. It applies to these two power sensors only. The original signed power reading and lifetime energy counters remain untouched, as do all existing sensor IDs and history. The new sensors become unavailable when their source reading is stale; an unavailable source is never converted into zero consumption.
 
-### Daily, monthly, and yearly utility meters
+### Utility meters
 
-In the same **Configure** screen, select **Create daily, monthly and yearly import/export utility meters**, then save. This creates six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
+In the same **Configure** screen, select **Create utility meters**, choose the **cycles** (quarter-hourly, hourly, daily, monthly, yearly; default daily/monthly/yearly) and **sources** (meter import/export by default; Estimated solar/household energy when the logger is configured), then save. The defaults create six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
 
 | Helpers | Source |
 | --- | --- |
@@ -142,17 +142,39 @@ If the SDM630 measures your connection to the grid, configure **Settings → Das
 | --- | --- |
 | Grid consumption | Meter **Import energy** (kWh) |
 | Return to grid | Meter **Export energy** (kWh) |
-| Solar production | Your inverter's actual solar-production energy sensor, for example from SolisCloud |
+| Solar production | Inverter **PV production total** or **Estimated solar energy** (see below), or a SolisCloud sensor — pick exactly one |
 
 Verify the meter's energy direction with known import/export conditions. Use the lifetime energy counters in the Energy dashboard; the daily/monthly/yearly helpers are optional for cards and automations. Do not add both a lifetime counter and its utility-meter helper to the same dashboard role, which would double-count energy.
 
 A meter at the grid connection measures exchange with the grid. It cannot distinguish all solar generation from household consumption: solar used inside the home never crosses that connection. **Total energy** from this meter is **import + export**, not solar production or house consumption. Listening to the Solis-to-meter Modbus link does not add the inverter's own production readings to that stream.
 
-For now, use your existing SolisCloud production sensor alongside the fully local grid readings. Fully local production requires a separate local source exposing the inverter's generation measurements. This integration remains passive and does not query the inverter. With a battery, configure its charge/discharge sources separately before interpreting household consumption or solar self-consumption.
+With a battery, configure its charge/discharge sources separately before interpreting household consumption or solar self-consumption. The calculated household values below assume **no battery**.
+
+## Local inverter (optional)
+
+Enter the S2-WL-ST logger's IP address in **Configure → Logger IP address or hostname** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
+
+- **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and logger settings and SolisCloud reporting are not changed. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
+- Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: ModbusError` in diagnostics and stay unavailable.
+- Entities live on a separate **Solis inverter** device. Meter entities, IDs and history are unchanged. A logger outage never affects meter availability and vice versa.
+- After failed polls, retries back off up to five minutes. Stale values become **unavailable**, never zero.
+
+| Entity | Source |
+| --- | --- |
+| PV DC power, PV 1/2 voltage/current/power | Inverter registers (PV power = V × I) |
+| AC voltage/current per phase, frequency, temperature, reactive/apparent power, internal inverting power, AC grid-port power, backup output power | Inverter registers |
+| PV production today / this month / this year / total (and previous periods) | Native inverter counters. **PV production total has 1 kWh resolution.** |
+| Operating status, fault/status bits, model/firmware codes, inverter-reported meter/household values | Diagnostic |
+| **Solar AC power** | AC grid-port power + backup output power, never negative |
+| **Household power** | Inverter AC delivery + net grid power (import positive, export negative). Needs a fresh meter sample within 5 s of the logger sample; otherwise unavailable. |
+| **Estimated solar / household energy** (kWh) | Trapezoidal integration of the two power values. Persisted across restarts; gaps, outages and restarts are **not** bridged, so these are lower bounds. |
+| Household balance status | Why household power is or isn't available (`ok`, `meter_unavailable`, `unaligned_samples`, …) |
+
+For the Energy dashboard, keep the meter's **Import/Export energy** for the grid. For solar, use **either** the native **PV production total** (coarse but authoritative across outages) **or** **Estimated solar energy** (smooth, but misses outages) — never both. The inverter-reported import/export counters are diagnostics only; the meter is authoritative for grid energy.
 
 ## Diagnostics and troubleshooting
 
-Download diagnostics from the integration's menu. They include traffic status, frame counters, buffer size, last/pending request metadata, and sample ages. The topic is redacted, and raw payload history is not included.
+Download diagnostics from the integration's menu. With a logger configured, a `logger` section shows the port, unit, poll failures, last error type, unsupported registers and value ages; the logger host is redacted. They also include traffic status, frame counters, buffer size, last/pending request metadata, and sample ages. The topic is redacted, and raw payload history is not included.
 
 The `traffic_status` field describes recognized traffic within the configured availability timeout:
 

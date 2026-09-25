@@ -14,7 +14,36 @@ async def async_get_config_entry_diagnostics(
     now = runtime.clock()
     pending = runtime.parser.pending
     last_request = runtime.parser.last_request
+    logger = runtime.logger
     return {
+        "logger": (
+            {
+                "host": "**REDACTED**",
+                "port": logger.port,
+                "unit": logger.unit,
+                "interval": logger.interval,
+                "running": logger._running,
+                "failures": logger.failures,
+                "last_error": logger.last_error,
+                "balance_status": logger.balance_status,
+                "unsupported": sorted(logger.unsupported),
+                "identity": {
+                    key: logger.values.get(key)
+                    for key in (
+                        "model",
+                        "dsp_version",
+                        "hmi_version",
+                        "protocol_version",
+                    )
+                },
+                "value_ages": {
+                    key: logger.clock() - stamp
+                    for key, stamp in logger.updated_at.items()
+                },
+            }
+            if logger
+            else None
+        ),
         "topic": "**REDACTED**",
         "traffic_status": runtime.traffic_status,
         "timeout": runtime.timeout,

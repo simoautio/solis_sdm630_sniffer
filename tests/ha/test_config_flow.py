@@ -7,7 +7,10 @@ import pytest
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.solis_sdm630_sniffer.config_flow import SnifferConfigFlow
+from custom_components.solis_sdm630_sniffer.config_flow import (
+    SnifferConfigFlow,
+    _logger_options,
+)
 from custom_components.solis_sdm630_sniffer.const import DOMAIN
 from custom_components.solis_sdm630_sniffer.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -55,6 +58,65 @@ async def test_mqtt_required(hass):
         "homeassistant.components.mqtt.mqtt_config_entry_enabled", return_value=False
     ):
         assert (await flow.async_step_user())["reason"] == "mqtt_required"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("logger_port", 0),
+        ("logger_port", True),
+        ("logger_unit", 248),
+        ("logger_interval", 9),
+        ("logger_interval", float("nan")),
+        ("logger_host", "http://logger/"),
+        ("logger_host", "192.168.1.135:502"),
+    ],
+)
+def test_invalid_logger_options(field, value):
+    errors = {}
+    _logger_options({"logger_host": "192.168.1.135", field: value}, {}, errors)
+    assert errors == {field: "invalid_logger"}
+
+
+async def test_invalid_logger_host_is_retryable(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={"topic": "test", "timeout": 60})
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={"timeout": 60, "logger_host": "http://x/"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"logger_host": "invalid_logger"}
+    assert entry.options == {}
+
+
+def test_empty_logger_host_disables_polling():
+    errors = {}
+    assert _logger_options({"logger_host": "  ", "logger_port": 0}, {}, errors) == {}
+    assert errors == {}
+
+
+async def test_logger_options_preserve_meter_settings(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"topic": "test", "timeout": 60},
+        options={"grid_import_sign": "negative"},
+    )
+    entry.add_to_hass(hass)
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={"timeout": 60, "logger_host": "192.168.1.135"}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["logger_port"] == 502
+    assert entry.options["logger_unit"] == 1
+    assert entry.options["logger_interval"] == 30
+    assert entry.options["grid_import_sign"] == "negative"
+    form = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        form["flow_id"], user_input={"timeout": 60, "logger_host": ""}
+    )
+    assert not any(key.startswith("logger_") for key in entry.options)
 
 
 async def test_duplicate_topic(hass, mqtt_transport):

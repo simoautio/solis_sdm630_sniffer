@@ -26,12 +26,18 @@
     "step": {
       "init": {
         "title": "Updates, energy and availability",
-        "description": "Choose which sign of Total active power means grid import. This affects the two grid power sensors only; meter energy counters keep their original direction. Optionally create six standard Utility Meter helpers from Import energy and Export energy. Existing matching helpers are kept. The first calendar period starts when a helper is created. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate.",
+        "description": "Choose which sign of Total active power means grid import. This affects the two grid power sensors only; meter energy counters keep their original direction. Optionally create six standard Utility Meter helpers from Import energy and Export energy. Existing matching helpers are kept. The first calendar period starts when a helper is created. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate. Optionally enter the IP address or hostname of the Solis S2-WL-ST logger to add local inverter readings. The logger is only read (Modbus function 04); nothing is written to the inverter or logger, and SolisCloud reporting is not changed. Leave it empty to disable. When creating utility meters, select the cycles and sources; Estimated solar/household energy sources need a configured logger.",
         "data": {
           "timeout": "Availability timeout (seconds)",
           "grid_import_sign": "Power sign for grid import",
           "create_utility_meters": "Create daily, monthly and yearly import/export utility meters",
-          "update_interval": "Update interval (seconds)"
+          "update_interval": "Update interval (seconds)",
+          "logger_host": "Logger IP address or hostname (optional)",
+          "logger_port": "Logger Modbus TCP port",
+          "logger_unit": "Inverter Modbus unit ID",
+          "logger_interval": "Logger polling interval (seconds)",
+          "utility_meter_cycles": "Utility meter cycles",
+          "utility_meter_sources": "Utility meter sources"
         }
       }
     },
@@ -40,7 +46,9 @@
       "invalid_direction": "Select positive or negative power for grid import.",
       "sources_not_ready": "Enable the Import energy and Export energy entities and load this integration before creating utility meters.",
       "utility_meters_failed": "Some utility meters could not be created. Existing helpers were kept; check the log and try again to create the missing ones.",
-      "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds."
+      "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
+      "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
+      "invalid_helper_selection": "Select only the listed cycles and sources."
     }
   },
   "selector": {
@@ -48,6 +56,38 @@
       "options": {
         "positive": "Positive power means import",
         "negative": "Negative power means import"
+      }
+    },
+    "utility_meter_cycles": {
+      "options": {
+        "quarter-hourly": "Quarter-hourly",
+        "hourly": "Hourly",
+        "daily": "Daily",
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      }
+    },
+    "utility_meter_sources": {
+      "options": {
+        "import": "Meter import energy",
+        "export": "Meter export energy",
+        "solar": "Estimated solar energy",
+        "household": "Estimated household energy"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance_status": {
+        "state": {
+          "waiting_for_sources": "Waiting for sources",
+          "ok": "OK",
+          "meter_unavailable": "Meter unavailable",
+          "unaligned_samples": "Samples not aligned",
+          "inverter_output_unavailable": "Inverter output unavailable",
+          "negative_household_balance": "Negative household balance",
+          "logger_unavailable": "Logger unavailable"
+        }
       }
     }
   }

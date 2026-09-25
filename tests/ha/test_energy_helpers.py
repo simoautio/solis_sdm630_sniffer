@@ -85,6 +85,40 @@ def register_sources(hass, entry):
     ]
 
 
+async def test_selected_cycles_and_estimated_sources(hass, energy_entry):
+    register_sources(hass, energy_entry)
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{energy_entry.entry_id}_inverter_estimated_solar_energy",
+        config_entry=energy_entry,
+    )
+    with patch.object(hass.config_entries, "async_setup", return_value=True):
+        assert (
+            await async_create_utility_meters(
+                hass,
+                energy_entry,
+                cycles=["quarter-hourly", "hourly"],
+                source_keys=["import", "solar"],
+            )
+            == 4
+        )
+        await hass.async_block_till_done()
+        assert (
+            await async_create_utility_meters(
+                hass,
+                energy_entry,
+                cycles=["quarter-hourly", "hourly"],
+                source_keys=["import", "solar"],
+            )
+            == 0
+        )
+    assert {
+        entry.options["cycle"]
+        for entry in hass.config_entries.async_entries("utility_meter")
+    } == {"quarter-hourly", "hourly"}
+
+
 async def test_create_real_helpers_and_idempotence(hass, energy_entry):
     sources = register_sources(hass, energy_entry)
     assert await async_setup_component(hass, "utility_meter", {})
@@ -157,7 +191,12 @@ async def test_options_sign_and_one_time_helper_action(hass, energy_entry):
             },
         )
         assert result["type"] == FlowResultType.CREATE_ENTRY
-        create.assert_awaited_once_with(hass, energy_entry)
+        create.assert_awaited_once_with(
+            hass,
+            energy_entry,
+            cycles=("daily", "monthly", "yearly"),
+            source_keys=("import", "export"),
+        )
     assert energy_entry.options == {
         "timeout": 90,
         "grid_import_sign": "negative",

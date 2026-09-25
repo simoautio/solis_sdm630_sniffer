@@ -90,3 +90,86 @@ async def test_unsupported_group_keeps_other_readings(runtime):
     assert runtime.values["production_today"] == 0
     assert runtime.values["ac_grid_power"] == 0
     await runtime.async_stop()
+
+
+async def test_setup_independence_restore_and_redaction(
+    hass, mqtt_transport, hass_storage
+):
+    import json
+    from datetime import timedelta
+
+    from homeassistant.helpers import entity_registry as er
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        async_fire_time_changed,
+    )
+
+    from custom_components.solis_sdm630_sniffer.const import DOMAIN
+    from custom_components.solis_sdm630_sniffer.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    key = f"{DOMAIN}.abc.energy"
+    hass_storage[key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": key,
+        "data": {"solar": 5, "household": 7},
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="abc",
+        data={"topic": "test", "timeout": 60},
+        options={"logger_host": "192.0.2.10"},
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
+        reader.return_value.__aenter__ = AsyncMock(side_effect=TimeoutError)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+        meter = entry.runtime_data
+        logger = meter.logger
+        assert logger.failures >= 1
+        assert logger.solar.total == 5 and logger.household.total == 7
+        status = registry.async_get_entity_id("sensor", DOMAIN, "abc_inverter_status")
+        assert hass.states.get(status).state == "unavailable"
+
+        # A logger outage never affects meter availability.
+        meter._latest_values[52] = 500
+        meter.updated_at[52] = meter.last_response_at = meter.clock()
+        meter.async_check_expiry()
+        await hass.async_block_till_done()
+        power = registry.async_get_entity_id("sensor", DOMAIN, "abc_52")
+        assert hass.states.get(power).state == "500"
+
+        diagnostics = json.dumps(await async_get_config_entry_diagnostics(hass, entry))
+        assert "192.0.2.10" not in diagnostics
+        assert '"last_error": "TimeoutError"' in diagnostics
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert hass_storage[key]["data"] == {"solar": 5, "household": 7}
+
+
+async def test_no_logger_entities_without_host(hass, mqtt_transport):
+    from homeassistant.helpers import entity_registry as er
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.solis_sdm630_sniffer.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, entry_id="plain", data={"topic": "test", "timeout": 60}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.logger is None
+    entities = er.async_entries_for_config_entry(er.async_get(hass), "plain")
+    assert entities and not any("_inverter_" in e.unique_id for e in entities)
+    assert await hass.config_entries.async_unload(entry.entry_id)

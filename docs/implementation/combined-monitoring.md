@@ -13,3 +13,5 @@ Live evidence: 11 logger cycles/5 minutes succeeded; MQTT subscription accepted 
 
 Ruling: execute on feature/combined-local-monitoring in an isolated temporary worktree. User's implementation instruction approves the in-chat plan; no repeat design approval needed.
 Ruling: preserve the SnifferRuntime as entry.runtime_data, adding an optional logger property. Existing sensor and diagnostics interfaces remain compatible.
+
+Progress 2026-09-25: runtime wired into setup/unload (entry.runtime_data stays SnifferRuntime; runtime.logger optional); options flow (host/port/unit/interval, helper cycles/sources; existing helper checkbox kept); inverter + derived entities on device `{entry_id}_inverter`, unique ids `{entry_id}_inverter_{key}`; redacted diagnostics; README/CHANGELOG. Worktree moved to /Users/simo/Desktop/solis_sniffer-combined. Pending: CI green, live acceptance, v0.4.0.
