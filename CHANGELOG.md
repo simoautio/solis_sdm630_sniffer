@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Add optional read-only Modbus TCP polling of the Solis S2-WL-ST logger (function 04 only) with inverter entities on a separate device.
 - Add Solar AC power, Household power (fresh, time-aligned meter and inverter samples only) and persisted Estimated solar/household energy.
