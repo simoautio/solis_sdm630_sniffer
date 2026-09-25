@@ -11,7 +11,10 @@ import pytest
 
 def load(name):
     spec = importlib.util.spec_from_file_location(
-        name, Path(__file__).parents[1] / "custom_components/solis_sdm630_sniffer" / f"{name}.py"
+        name,
+        Path(__file__).parents[1]
+        / "custom_components/solis_sdm630_sniffer"
+        / f"{name}.py",
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -19,7 +22,19 @@ def load(name):
     return module
 
 
-@pytest.mark.parametrize("failure", [None, "transaction", "unit", "length", "function", "exception", "short", "timeout"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        "transaction",
+        "unit",
+        "length",
+        "function",
+        "exception",
+        "short",
+        "timeout",
+    ],
+)
 def test_read_only_tcp_frames(failure):
     mod = load("modbus_tcp")
 
@@ -27,14 +42,29 @@ def test_read_only_tcp_frames(failure):
         async def serve(reader, writer):
             try:
                 request = await reader.readexactly(12)
-                tid, proto, length, unit, function, address, count = struct.unpack(">HHHBBHH", request)
-                assert (proto, length, unit, function, address, count) == (0, 6, 1, 4, 33151, 2)
+                tid, proto, length, unit, function, address, count = struct.unpack(
+                    ">HHHBBHH", request
+                )
+                assert (proto, length, unit, function, address, count) == (
+                    0,
+                    6,
+                    1,
+                    4,
+                    33151,
+                    2,
+                )
                 body = bytes([4, 4]) + struct.pack(">HH", 65535, 65526)
                 if failure == "function":
                     body = bytes([3]) + body[1:]
                 if failure == "exception":
                     body = bytes([0x84, 2])
-                header = struct.pack(">HHHB", tid + (failure == "transaction"), 0, 999 if failure == "length" else len(body) + 1, 2 if failure == "unit" else 1)
+                header = struct.pack(
+                    ">HHHB",
+                    tid + (failure == "transaction"),
+                    0,
+                    999 if failure == "length" else len(body) + 1,
+                    2 if failure == "unit" else 1,
+                )
                 if failure == "timeout":
                     await reader.read()
                     return
@@ -49,7 +79,9 @@ def test_read_only_tcp_frames(failure):
 
         server = await asyncio.start_server(serve, "127.0.0.1", 0)
         async with server:
-            client = mod.ModbusReader("127.0.0.1", server.sockets[0].getsockname()[1], 1, timeout=0.1)
+            client = mod.ModbusReader(
+                "127.0.0.1", server.sockets[0].getsockname()[1], 1, timeout=0.1
+            )
             async with client:
                 if failure:
                     with pytest.raises((mod.ModbusError, TimeoutError)):
@@ -69,7 +101,9 @@ def test_profile_scaling_and_signedness():
     assert by_key["production_total"].decode((1, 2)) == 65538
     assert by_key["status"].decode((0x2011,)) == "Meter communication failure"
     assert by_key["status"].decode((0xABCD,)) == "Unknown (0xABCD)"
-    assert not any(item.key.startswith(("pv3", "pv4", "battery")) for item in mod.REGISTERS)
+    assert not any(
+        item.key.startswith(("pv3", "pv4", "battery")) for item in mod.REGISTERS
+    )
 
 
 def test_energy_estimate_persistence_and_gaps():
@@ -84,6 +118,16 @@ def test_energy_estimate_persistence_and_gaps():
     assert restored.update(20000, 3000) == 15
 
 
-@pytest.mark.parametrize("ac,backup,grid,expected", [(1000, 0, 500, (1000, 1500)), (1000, 200, -500, (1200, 700)), (-30, 0, 500, (0, 470)), (100, 0, -120, (100, 0)), (100, 0, -200, (100, None)), (None, 0, 500, (None, None))])
+@pytest.mark.parametrize(
+    "ac,backup,grid,expected",
+    [
+        (1000, 0, 500, (1000, 1500)),
+        (1000, 200, -500, (1200, 700)),
+        (-30, 0, 500, (0, 470)),
+        (100, 0, -120, (100, 0)),
+        (100, 0, -200, (100, None)),
+        (None, 0, 500, (None, None)),
+    ],
+)
 def test_household_balance(ac, backup, grid, expected):
     assert load("energy").combined_power(ac, backup, grid) == expected

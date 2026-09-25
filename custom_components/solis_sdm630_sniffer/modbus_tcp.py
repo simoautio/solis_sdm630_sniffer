@@ -48,13 +48,26 @@ class ModbusReader:
             try:
                 async with asyncio.timeout(self.timeout):
                     self._transaction = (self._transaction + 1) % 65536
-                    self._writer.write(struct.pack(
-                        ">HHHBBHH", self._transaction, 0, 6, self.unit, 4, address, count
-                    ))
+                    self._writer.write(
+                        struct.pack(
+                            ">HHHBBHH",
+                            self._transaction,
+                            0,
+                            6,
+                            self.unit,
+                            4,
+                            address,
+                            count,
+                        )
+                    )
                     await self._writer.drain()
                     header = await self._reader.readexactly(7)
                     transaction, protocol, length, unit = struct.unpack(">HHHB", header)
-                    if (transaction, protocol, unit) != (self._transaction, 0, self.unit) or not 3 <= length <= 103:
+                    if (transaction, protocol, unit) != (
+                        self._transaction,
+                        0,
+                        self.unit,
+                    ) or not 3 <= length <= 103:
                         raise ModbusError("Invalid response header")
                     body = await self._reader.readexactly(length - 1)
                     if body[0] == 0x84 and len(body) == 2:

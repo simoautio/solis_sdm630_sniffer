@@ -47,6 +47,11 @@ class SnifferRuntime:
         self._connected = False
         self._running = False
         self._available: set[int] = set()
+        self.logger = None
+
+    def latest_value(self, address: int) -> float | None:
+        """Fresh received value for synchronized calculations, not publication."""
+        return self._latest_values.get(address) if self.is_available(address) else None
 
     async def async_start(self) -> None:
         """Subscribe using the shared MQTT connection without publishing."""

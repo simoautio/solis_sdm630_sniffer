@@ -42,7 +42,9 @@ async def test_failure_breaks_integration_and_does_not_stop_meter(runtime):
     runtime.solar.update(0, 1000)
     runtime.solar.update(30, 1000)
     before = runtime.solar.total
-    with patch("custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader") as reader:
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
         reader.return_value.__aenter__ = AsyncMock(side_effect=TimeoutError)
         await runtime.async_poll()
     assert runtime.values == {}
@@ -78,7 +80,9 @@ async def test_unsupported_group_keeps_other_readings(runtime):
     client = AsyncMock()
     client.read.side_effect = read
     runtime._running = True
-    with patch("custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader") as factory:
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as factory:
         factory.return_value.__aenter__ = AsyncMock(return_value=client)
         factory.return_value.__aexit__ = AsyncMock()
         await runtime.async_poll()
