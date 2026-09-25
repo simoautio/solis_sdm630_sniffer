@@ -145,7 +145,18 @@ Submitting the page is a **one-time action**; nothing is stored for future start
 
 Find the created helpers under **Settings → Devices & services → Helpers**. They preserve their totals through restarts and use Home Assistant's local calendar for resets. The initial day/month/year is incomplete: accounting starts when the helper is created, with no historical backfill. Previous-period totals are exposed by the built-in helper. Sources are treated as lifetime counters with **Periodically resetting** disabled, so cumulative changes can be recovered after a temporary source outage. Negative counter corrections are not counted as negative consumption.
 
-The helpers use the meter's original import/export counter directions. The power-sign setting does **not** swap their sources. If your meter's forward/reverse energy directions are opposite to physical grid import/export, map the appropriate counters in the Energy dashboard and adjust the helpers' names/sources yourself. Existing helpers are independently managed and are never deleted or retargeted automatically, including when this integration is removed.
+### Meter mounted in reverse
+
+Import means energy bought **from** the grid; export means energy sold **to** the grid. If the meter (or its current clamps) is mounted the other way round, its counters are swapped. A telltale sign without a battery: **Export energy is larger than the inverter's PV production total**, which is impossible.
+
+Enable **Configure → Meter → Meter mounted in reverse**. The *Import energy* and *Export energy* entities (and the per-phase ones) then swap **labels**, and newly created utility meter helpers use the swapped sources. Values are not moved between entities, so each keeps one continuous history and the Energy dashboard sees no false jumps. Afterwards:
+
+- In the Energy dashboard, use the entity now named **Import energy** for *Grid consumption* and **Export energy** for *Return to grid*.
+- Entity IDs are not renamed automatically; rename them in the entity settings if you want them to match.
+- Helpers created before the change keep their old sources; delete and recreate them if needed.
+- Power sensors are separate: set **Power sign for grid import** so Grid import power is non-zero while you buy electricity.
+
+Otherwise the helpers use the meter's original import/export counter directions. Existing helpers are independently managed and are never deleted or retargeted automatically, including when this integration is removed.
 
 ### Energy dashboard and solar production
 

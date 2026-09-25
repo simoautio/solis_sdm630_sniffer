@@ -53,11 +53,12 @@
       },
       "meter": {
         "title": "Meter",
-        "description": "Choose which sign of Total active power means grid import. This affects the grid import/export power sensors only; meter energy counters keep their original direction. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate.",
+        "description": "Choose which sign of Total active power means grid import. This affects the grid import/export power sensors only; meter energy counters keep their original direction. Publish the latest sensor readings at the update interval (default 30 seconds). This also controls dashboard, automation, and history updates; availability changes are immediate. If the meter's Export energy grows while you buy electricity (for example, export is larger than your total solar production), enable Meter mounted in reverse: the Import and Export energy entities swap labels and helper sources, while each keeps its history. It does not change power sensors; set their direction with the power sign above.",
         "data": {
           "timeout": "Availability timeout (seconds)",
           "update_interval": "Update interval (seconds)",
-          "grid_import_sign": "Power sign for grid import"
+          "grid_import_sign": "Power sign for grid import",
+          "meter_reversed": "Meter mounted in reverse (swap import/export energy)"
         }
       },
       "logger": {

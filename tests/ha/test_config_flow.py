@@ -251,6 +251,7 @@ async def test_options(hass, mqtt_transport):
         "timeout": 120,
         "grid_import_sign": "positive",
         "update_interval": 30,
+        "meter_reversed": False,
     }
 
 

@@ -25,3 +25,4 @@ CONF_MODE = "mode"
 MODES = ("meter", "logger", "both")
 METER_TITLE = "Solis SDM630 Sniffer"
 LOGGER_TITLE = "Solis inverter"
+CONF_METER_REVERSED = "meter_reversed"

@@ -195,6 +195,7 @@ async def test_options_sign_and_one_time_helper_action(hass, energy_entry):
         "timeout": 90,
         "grid_import_sign": "negative",
         "update_interval": 30,
+        "meter_reversed": False,
     }
     result = await open_options(hass, energy_entry, "utility_meters")
     with patch(
@@ -217,6 +218,7 @@ async def test_options_sign_and_one_time_helper_action(hass, energy_entry):
         "timeout": 90,
         "grid_import_sign": "negative",
         "update_interval": 30,
+        "meter_reversed": False,
     }
 
 
@@ -274,3 +276,33 @@ async def test_partial_creation_failure_can_be_retried(hass, energy_entry):
     entries = hass.config_entries.async_entries("utility_meter")
     assert len(entries) == 6
     assert first_id in {entry.entry_id for entry in entries}
+
+
+async def test_reversed_meter_relabels_counters_and_helper_sources(hass, energy_entry):
+    hass.config_entries.async_update_entry(
+        energy_entry, options={"meter_reversed": True}
+    )
+    energy_entry.runtime_data = SnifferRuntime(hass, "test", 60)
+    by_address = {d.address: d for d in DESCRIPTIONS}
+    imported = SnifferSensor(energy_entry, by_address[72])
+    phase = SnifferSensor(energy_entry, by_address[352])
+    # Same unique ID and value source; only the label follows physical direction.
+    assert imported.unique_id == f"{energy_entry.entry_id}_72"
+    assert imported.name == "Export energy"
+    assert phase.name == "L1 import energy"
+    assert SnifferSensor(energy_entry, by_address[52]).name == "Total active power"
+    energy_entry.runtime_data.values[72] = 327
+    assert imported.native_value == 327
+
+    sources = register_sources(hass, energy_entry)
+    with patch.object(
+        hass.config_entries.flow, "async_init", return_value={"type": "create_entry"}
+    ) as create:
+        assert (
+            await async_create_utility_meters(
+                hass, energy_entry, cycles=("daily",), source_keys=("import",)
+            )
+            == 1
+        )
+    # "import" helpers track the meter's physical import: register 74.
+    assert create.call_args.kwargs["data"]["source"] == sources[1].entity_id

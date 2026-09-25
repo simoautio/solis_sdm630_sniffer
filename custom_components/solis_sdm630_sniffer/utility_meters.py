@@ -11,7 +11,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
+from .const import CONF_METER_REVERSED, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 _LOCK_KEY = f"{DOMAIN}.utility_meter_creation_lock"
@@ -48,9 +48,13 @@ async def async_create_utility_meters(
         sources = []
         # Validate every source before creating any helpers. Never guess entity IDs:
         # users may have renamed them, or have multiple meter entries.
+        reversed_meter = entry.options.get(CONF_METER_REVERSED, False)
         for direction in source_keys:
+            suffix = SOURCES[direction]
+            if reversed_meter and direction in ("import", "export"):
+                suffix = SOURCES["export" if direction == "import" else "import"]
             entity_id = registry.async_get_entity_id(
-                "sensor", DOMAIN, f"{entry.entry_id}_{SOURCES[direction]}"
+                "sensor", DOMAIN, f"{entry.entry_id}_{suffix}"
             )
             source = registry.async_get(entity_id) if entity_id else None
             if source is None or source.disabled_by is not None:

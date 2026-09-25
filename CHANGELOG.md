@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Add **Meter mounted in reverse** (Configure → Meter) for meters whose import/export counters are swapped. The Import and Export energy entities (including per-phase) swap labels and helper sources; each entity keeps one continuous history, so statistics see no false jumps.
+
 ## 0.5.0
 
 - Choose at setup what to monitor: meter and inverter, meter only (MQTT sniffer), or inverter only (logger Modbus TCP).

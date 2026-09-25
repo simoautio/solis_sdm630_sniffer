@@ -56,3 +56,7 @@ for address, key, name in (
     (356, "l3_export_energy", "L3 export energy"),
 ):
     REGISTERS[address] = Register(key, name, "kWh", "energy", "total_increasing")
+
+# Import/export counter pairs. A meter mounted in reverse counts import as export.
+_PAIRS = ((72, 74), (346, 352), (348, 354), (350, 356))
+COUNTERPART = {a: b for pair in _PAIRS for a, b in (pair, pair[::-1])}

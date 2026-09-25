@@ -18,6 +18,7 @@ from .const import (
     CONF_LOGGER_INTERVAL,
     CONF_LOGGER_PORT,
     CONF_LOGGER_UNIT,
+    CONF_METER_REVERSED,
     CONF_MODE,
     CONF_TIMEOUT,
     CONF_TOPIC,
@@ -325,6 +326,9 @@ class SnifferOptionsFlow(OptionsFlow):
                         CONF_TIMEOUT: user_input[CONF_TIMEOUT],
                         CONF_UPDATE_INTERVAL: interval,
                         CONF_GRID_IMPORT_SIGN: sign,
+                        CONF_METER_REVERSED: bool(
+                            user_input.get(CONF_METER_REVERSED, False)
+                        ),
                     }
                 )
         default = self.config_entry.options.get(
@@ -342,6 +346,10 @@ class SnifferOptionsFlow(OptionsFlow):
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
+            vol.Optional(
+                CONF_METER_REVERSED,
+                default=self.config_entry.options.get(CONF_METER_REVERSED, False),
+            ): selector.BooleanSelector(),
         }
         return self.async_show_form(
             step_id="meter",

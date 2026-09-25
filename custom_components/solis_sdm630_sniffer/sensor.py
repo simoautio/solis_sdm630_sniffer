@@ -14,10 +14,15 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import SnifferConfigEntry
-from .const import CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN, DOMAIN
+from .const import (
+    CONF_GRID_IMPORT_SIGN,
+    CONF_METER_REVERSED,
+    DEFAULT_GRID_IMPORT_SIGN,
+    DOMAIN,
+)
 from .energy import split_grid_power
 from .inverter_registers import REGISTERS as INVERTER_REGISTERS
-from .registers import REGISTERS
+from .registers import COUNTERPART, REGISTERS
 
 PARALLEL_UPDATES = 0
 
@@ -158,6 +163,14 @@ class SnifferSensor(SensorEntity):
             description.key if description.grid_direction else description.address
         )
         self._attr_unique_id = f"{entry.entry_id}_{identifier}"
+        if (
+            entry.options.get(CONF_METER_REVERSED)
+            and description.address in COUNTERPART
+            and not description.grid_direction
+        ):
+            # Relabel instead of swapping values: each entity's history stays
+            # one continuous counter, with no false jumps in statistics.
+            self._attr_name = REGISTERS[COUNTERPART[description.address]].name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="Solis SDM630 meter",
