@@ -24,7 +24,10 @@ def sample(runtime, stamp, ac=1000, backup=0):
 
 async def test_aligned_power_and_stale_meter(runtime):
     runtime._running = True
-    with patch.object(runtime, "clock", return_value=100):
+    with (
+        patch.object(runtime, "clock", return_value=100),
+        patch.object(runtime.meter, "clock", return_value=100),
+    ):
         sample(runtime, 100)
         runtime.update_combined(100)
         assert runtime.values["solar_ac_power"] == 1000

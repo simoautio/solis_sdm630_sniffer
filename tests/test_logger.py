@@ -35,61 +35,74 @@ def load(name):
         "timeout",
     ],
 )
-def test_read_only_tcp_frames(failure):
+def test_read_only_tcp_frames(failure, monkeypatch):
+    # In-memory stream: HA's test plugin blocks sockets.
     mod = load("modbus_tcp")
 
-    async def run():
-        async def serve(reader, writer):
-            try:
-                request = await reader.readexactly(12)
-                tid, proto, length, unit, function, address, count = struct.unpack(
-                    ">HHHBBHH", request
-                )
-                assert (proto, length, unit, function, address, count) == (
-                    0,
-                    6,
-                    1,
-                    4,
-                    33151,
-                    2,
-                )
-                body = bytes([4, 4]) + struct.pack(">HH", 65535, 65526)
-                if failure == "function":
-                    body = bytes([3]) + body[1:]
-                if failure == "exception":
-                    body = bytes([0x84, 2])
-                header = struct.pack(
-                    ">HHHB",
-                    tid + (failure == "transaction"),
-                    0,
-                    999 if failure == "length" else len(body) + 1,
-                    2 if failure == "unit" else 1,
-                )
-                if failure == "timeout":
-                    await reader.read()
-                    return
-                writer.write(header[:3])
-                await writer.drain()
-                await asyncio.sleep(0)
-                writer.write(header[3:] + (body[:1] if failure == "short" else body))
-                await writer.drain()
-            finally:
-                writer.close()
-                await writer.wait_closed()
+    class Writer:
+        def __init__(self, reader):
+            self.reader = reader
 
-        server = await asyncio.start_server(serve, "127.0.0.1", 0)
-        async with server:
-            client = mod.ModbusReader(
-                "127.0.0.1", server.sockets[0].getsockname()[1], 1, timeout=0.1
+        def write(self, request):
+            tid, proto, length, unit, function, address, count = struct.unpack(
+                ">HHHBBHH", request
             )
-            async with client:
-                if failure:
-                    with pytest.raises((mod.ModbusError, TimeoutError)):
-                        await client.read(33151, 2)
-                else:
-                    assert await client.read(33151, 2) == (65535, 65526)
+            assert (proto, length, unit, function, address, count) == (
+                0,
+                6,
+                1,
+                4,
+                33151,
+                2,
+            )
+            if failure == "timeout":
+                return
+            body = bytes([4, 4]) + struct.pack(">HH", 65535, 65526)
+            if failure == "function":
+                body = bytes([3]) + body[1:]
+            if failure == "exception":
+                body = bytes([0x84, 2])
+            header = struct.pack(
+                ">HHHB",
+                tid + (failure == "transaction"),
+                0,
+                999 if failure == "length" else len(body) + 1,
+                2 if failure == "unit" else 1,
+            )
+            self.reader.feed_data(header + (body[:1] if failure == "short" else body))
+            if failure == "short":
+                self.reader.feed_eof()
 
-    asyncio.run(run())
+        async def drain(self):
+            pass
+
+        def close(self):
+            pass
+
+        async def wait_closed(self):
+            pass
+
+    async def open_connection(host, port):
+        assert (host, port) == ("logger.test", 502)
+        reader = asyncio.StreamReader()
+        return reader, Writer(reader)
+
+    monkeypatch.setattr(mod.asyncio, "open_connection", open_connection)
+
+    async def run():
+        async with mod.ModbusReader("logger.test", 502, 1, timeout=0.1) as client:
+            if failure:
+                with pytest.raises((mod.ModbusError, TimeoutError)):
+                    await client.read(33151, 2)
+            else:
+                assert await client.read(33151, 2) == (65535, 65526)
+
+    # A private loop: asyncio.run() would clear the loop HA's plugin relies on.
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(run())
+    finally:
+        loop.close()
 
 
 def test_profile_scaling_and_signedness():
