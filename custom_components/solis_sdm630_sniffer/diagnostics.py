@@ -16,6 +16,7 @@ async def async_get_config_entry_diagnostics(
     return {
         "topic": "**REDACTED**",
         "timeout": runtime.timeout,
+        "update_interval": runtime.update_interval,
         "last_response_age": (
             now - runtime.last_response_at
             if runtime.last_response_at is not None

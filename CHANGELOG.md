@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add a configurable update interval in setup and Configure (1–86400 seconds, default 30 seconds). Existing installations also use 30 seconds unless configured otherwise.
+- Publish the latest readings at the interval to reduce dashboard, automation, and history updates while continuing to decode all incoming traffic.
+- Report first readings and availability changes immediately; keep freshness independent of the publication interval.
+- Preserve entity IDs, existing history, and cumulative energy totals.
+
 ## 0.2.0
 
 - Add Grid import power and Grid export power sensors in W.

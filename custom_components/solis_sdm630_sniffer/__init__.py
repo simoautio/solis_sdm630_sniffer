@@ -4,7 +4,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_TIMEOUT, CONF_TOPIC, DEFAULT_TIMEOUT
+from .const import (
+    CONF_TIMEOUT,
+    CONF_TOPIC,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_TIMEOUT,
+    DEFAULT_UPDATE_INTERVAL,
+)
 from .runtime import SnifferRuntime
 
 type SnifferConfigEntry = ConfigEntry[SnifferRuntime]
@@ -18,6 +24,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SnifferConfigEntry) -> b
         hass,
         entry.data[CONF_TOPIC],
         entry.options.get(CONF_TIMEOUT, entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)),
+        update_interval=entry.options.get(
+            CONF_UPDATE_INTERVAL,
+            entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+        ),
     )
     try:
         await runtime.async_start()

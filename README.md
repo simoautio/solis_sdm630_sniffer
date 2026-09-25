@@ -24,7 +24,7 @@ On your **Home Assistant machine**:
 3. Find **Solis SDM630 Sniffer** and download it.
 4. Restart Home Assistant.
 5. Go to **Settings → Devices & services → Add integration → Solis SDM630 Sniffer**.
-6. Enter the MQTT topic and availability timeout (default **60 seconds**).
+6. Enter the MQTT topic, availability timeout (default **60 seconds**), and update interval (default **30 seconds**).
 
 This is a HACS **custom repository**, not a listing in HACS's default catalog. No Home Assistant installation is needed on the computer used to clone or develop this repository.
 
@@ -90,7 +90,11 @@ Device classes match the physical quantities. The meter map follows the [Eastron
 
 ## Availability and configuration
 
-Use **Configure** on the integration to change the power sign, optionally create utility meters, or change the timeout from **1 to 86400 seconds**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
+Use **Configure** on the integration to change the power sign, optionally create utility meters, or change the availability timeout and update interval, each from **1 to 86400 seconds**. The entry reloads cleanly when the option changes. To change the topic, remove the entry and add it with the new topic.
+
+**Update interval** defaults to **30 seconds**, including existing installations without a saved setting. The integration still decodes every incoming MQTT message, but publishes only the latest readings at each interval. Dashboard values, automations, and Home Assistant history therefore update less often. Samples are not averaged, and intermediate readings are not replayed. Unchanged values need no new publication. Home Assistant manages history storage; this setting does not change Recorder configuration or the inverter’s polling rate.
+
+Each sensor’s first valid reading, loss of availability, and recovery are reported immediately. Availability uses incoming sample timestamps independently of the update interval. Cumulative energy sensors still publish the meter’s latest lifetime totals.
 
 A correctly paired, CRC-valid response refreshes meter freshness. Each individual sensor also has its own freshness timer. Requests alone, CRC failures, exception responses, unpaired responses, and retained messages cannot keep stale readings available. MQTT disconnection immediately makes readings unavailable and clears partial frames; fresh traffic is required after reconnection.
 

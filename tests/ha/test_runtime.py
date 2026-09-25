@@ -160,9 +160,9 @@ async def test_timer_schedules_and_notifies(hass, mqtt_transport):
     ) as schedule:
         await runtime.async_start()
         runtime.async_message_received(message(transaction()))
-        assert schedule.call_args.args[1] == 60
+        expiry = next(call for call in schedule.call_args_list if call.args[1] == 60)
         now[0] = 60
-        schedule.call_args.args[2](None)
+        expiry.args[2](None)
         assert not runtime.is_available(0)
         assert listener.call_count == 2
         remove()
@@ -192,3 +192,139 @@ async def test_subscribe_failure_removes_connection_listener(hass, mqtt_transpor
         await runtime.async_start()
     mqtt_transport[1].return_value.assert_called_once()
     assert not runtime.is_available(0)
+
+
+async def test_interval_batches_latest_without_availability_leaks(
+    hass, entry, mqtt_transport
+):
+    now = [0.0]
+    runtime = SnifferRuntime(hass, "test", 60, clock=lambda: now[0])
+    entry.runtime_data = runtime
+    sensor = SnifferSensor(entry, DESCRIPTIONS[0])
+    sensor.hass = hass
+    sensor.entity_id = "sensor.interval_voltage"
+    await runtime.async_start()
+    await sensor.async_added_to_hass()
+    try:
+        runtime.async_message_received(message(transaction(0, 230)))
+        assert hass.states.get(sensor.entity_id).state == "230.0"
+        now[0] = 1
+        runtime.async_message_received(message(transaction(0, 231)))
+        assert sensor.native_value == 230
+        # A different sensor's first reading must not flush pending voltage.
+        runtime.async_message_received(message(transaction(6, 3)))
+        assert hass.states.get(sensor.entity_id).state == "230.0"
+        now[0] = 29
+        runtime.async_message_received(message(transaction(0, 232)))
+        assert sensor.native_value == 230
+        now[0] = 30
+        runtime.async_publish_values()
+        assert hass.states.get(sensor.entity_id).state == "232.0"
+        unchanged = hass.states.get(sensor.entity_id)
+        now[0] = 60
+        runtime.async_publish_values()
+        assert hass.states.get(sensor.entity_id) is unchanged
+        now[0] = 62
+        runtime.async_check_expiry()
+        assert sensor.available  # Incoming samples, not publications, set freshness.
+        now[0] = 89
+        runtime.async_check_expiry()
+        assert hass.states.get(sensor.entity_id).state == "unavailable"
+        runtime.async_message_received(message(transaction(0, 233)))
+        assert hass.states.get(sensor.entity_id).state == "233.0"
+        runtime.async_connection_changed(False)
+        assert hass.states.get(sensor.entity_id).state == "unavailable"
+    finally:
+        await sensor.async_remove(force_remove=True)
+        runtime.async_stop()
+
+
+async def test_interval_timer_flushes_and_cleans_up(hass, mqtt_transport):
+    now = [0.0]
+    runtime = SnifferRuntime(hass, "test", 60, update_interval=10, clock=lambda: now[0])
+    with patch(
+        "custom_components.solis_sdm630_sniffer.runtime.async_call_later"
+    ) as schedule:
+        await runtime.async_start()
+        runtime.async_message_received(message(transaction(72, 100)))
+        publication = next(
+            call for call in schedule.call_args_list if call.args[1] == 10
+        )
+        now[0] = 1
+        runtime.async_message_received(message(transaction(72, 105)))
+        assert runtime.values[72] == 100
+        now[0] = 10
+        publication.args[2](None)
+        assert runtime.values[72] == 105
+        runtime.async_stop()
+        now[0] = 20
+        publication.args[2](None)
+        assert not runtime.is_available(72)
+        assert runtime._cancel_publish_timer is None
+
+
+@pytest.mark.parametrize(
+    "data_interval, option_interval, expected",
+    [(None, None, 30), (15, None, 15), (15, 1, 1)],
+)
+async def test_setup_uses_interval(
+    hass, entry, mqtt_transport, data_interval, option_interval, expected
+):
+    if data_interval is not None:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, "update_interval": data_interval}
+        )
+    if option_interval is not None:
+        hass.config_entries.async_update_entry(
+            entry, options={"update_interval": option_interval}
+        )
+    with patch.object(
+        hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock
+    ):
+        await async_setup_entry(hass, entry)
+    try:
+        assert entry.runtime_data.update_interval == expected
+    finally:
+        entry.runtime_data.async_stop()
+
+
+async def test_real_timer_updates_grid_power_and_stops_on_disconnect(
+    hass, entry, mqtt_transport, freezer
+):
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from custom_components.solis_sdm630_sniffer.sensor import GRID_DESCRIPTIONS
+
+    now = [0.0]
+    runtime = entry.runtime_data = SnifferRuntime(
+        hass, "test", 60, update_interval=10, clock=lambda: now[0]
+    )
+    sensors = [SnifferSensor(entry, description) for description in GRID_DESCRIPTIONS]
+    await runtime.async_start()
+    try:
+        runtime.async_message_received(message(transaction(52, 500)))
+        now[0] = 1
+        runtime.async_message_received(message(transaction(52, -700)))
+        assert tuple(sensor.native_value for sensor in sensors) == (500, 0)
+        now[0] = 10
+        freezer.tick(timedelta(seconds=10))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert tuple(sensor.native_value for sensor in sensors) == (0, 700)
+        now[0] = 11
+        runtime.async_message_received(message(transaction(52, 900)))
+        runtime.async_connection_changed(False)
+        now[0] = 20
+        freezer.tick(timedelta(seconds=10))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert tuple(sensor.native_value for sensor in sensors) == (0, 700)
+        assert all(not sensor.available for sensor in sensors)
+        runtime.async_connection_changed(True)
+        runtime.async_message_received(message(transaction(52, 1200)))
+        assert tuple(sensor.native_value for sensor in sensors) == (1200, 0)
+    finally:
+        runtime.async_stop()

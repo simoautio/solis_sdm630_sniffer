@@ -158,7 +158,11 @@ async def test_options_sign_and_one_time_helper_action(hass, energy_entry):
         )
         assert result["type"] == FlowResultType.CREATE_ENTRY
         create.assert_awaited_once_with(hass, energy_entry)
-    assert energy_entry.options == {"timeout": 90, "grid_import_sign": "negative"}
+    assert energy_entry.options == {
+        "timeout": 90,
+        "grid_import_sign": "negative",
+        "update_interval": 30,
+    }
     result = await hass.config_entries.options.async_init(energy_entry.entry_id)
     with patch(
         "custom_components.solis_sdm630_sniffer.config_flow.async_create_utility_meters"

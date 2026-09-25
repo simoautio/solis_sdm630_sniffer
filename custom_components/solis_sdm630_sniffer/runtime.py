@@ -11,6 +11,7 @@ from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 
+from .const import DEFAULT_UPDATE_INTERVAL
 from .protocol import StreamParser
 from .registers import REGISTERS
 
@@ -26,14 +27,18 @@ class SnifferRuntime:
         topic: str,
         timeout: float,
         *,
+        update_interval: float = DEFAULT_UPDATE_INTERVAL,
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self.hass = hass
         self.topic = topic
         self.timeout = timeout
+        self.update_interval = update_interval
         self.clock = clock
         self.parser = StreamParser()
         self.values: dict[int, float] = {}
+        self._latest_values: dict[int, float] = {}
+        self._cancel_publish_timer: Callable[[], None] | None = None
         self.updated_at: dict[int, float] = {}
         self.last_response_at: float | None = None
         self.listeners: set[Callable[[], None]] = set()
@@ -74,6 +79,10 @@ class SnifferRuntime:
         if self._cancel_timer:
             self._cancel_timer()
             self._cancel_timer = None
+        if self._cancel_publish_timer:
+            self._cancel_publish_timer()
+            self._cancel_publish_timer = None
+        self._latest_values.clear()
         while self._cleanup:
             self._cleanup.pop()()
         self.parser.reset()
@@ -107,7 +116,6 @@ class SnifferRuntime:
             return
         now = self.clock()
         updates = self.parser.feed(bytes(message.payload), now)
-        changed = False
         for update in updates:
             self.last_response_at = now
             for address, value in update.values.items():
@@ -119,10 +127,9 @@ class SnifferRuntime:
                         "Ignored negative cumulative energy at register %d", address
                     )
                     continue
-                changed |= self.values.get(address) != value
-                self.values[address] = value
+                self._latest_values[address] = value
                 self.updated_at[address] = now
-        self._refresh(now, changed)
+        self._refresh(now, False)
 
     def is_available(self, address: int) -> bool:
         """Both the stream and this specific reading must be fresh."""
@@ -146,6 +153,10 @@ class SnifferRuntime:
             address for address in self.updated_at if self.is_available(address)
         }
         if available != self._available:
+            # First samples and recovery publish immediately, without flushing
+            # pending changes for registers that remained available.
+            for address in available - self._available:
+                self.values[address] = self._latest_values[address]
             changed = True
             if bool(available) != bool(self._available):
                 _LOGGER.debug(
@@ -162,6 +173,28 @@ class SnifferRuntime:
             self._cancel_timer = async_call_later(
                 self.hass, max(0, deadline - now), self.async_check_expiry
             )
+        if available and self._cancel_publish_timer is None:
+            self._cancel_publish_timer = async_call_later(
+                self.hass, self.update_interval, self.async_publish_values
+            )
+        elif not available and self._cancel_publish_timer:
+            self._cancel_publish_timer()
+            self._cancel_publish_timer = None
         if changed:
             for listener in tuple(self.listeners):
                 listener()
+
+    @callback
+    def async_publish_values(self, _now: datetime | None = None) -> None:
+        """Publish the newest fresh samples on a fixed cadence, even in silence."""
+        if self._cancel_publish_timer:
+            self._cancel_publish_timer()
+            self._cancel_publish_timer = None
+        if not self._running or not self._connected:
+            return
+        changed = False
+        for address, value in self._latest_values.items():
+            if self.is_available(address) and self.values.get(address) != value:
+                self.values[address] = value
+                changed = True
+        self._refresh(self.clock(), changed)

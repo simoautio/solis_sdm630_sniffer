@@ -17,17 +17,19 @@ from .const import (
     CONF_GRID_IMPORT_SIGN,
     CONF_TIMEOUT,
     CONF_TOPIC,
+    CONF_UPDATE_INTERVAL,
     DEFAULT_GRID_IMPORT_SIGN,
     DEFAULT_TIMEOUT,
     DEFAULT_TOPIC,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
 from .utility_meters import UtilityMeterSetupError, async_create_utility_meters
 
 
-def _timeout_schema(default: float) -> dict:
+def _seconds_schema(default: float, key: str = CONF_TIMEOUT) -> dict:
     return {
-        vol.Required(CONF_TIMEOUT, default=default): selector.NumberSelector(
+        vol.Required(key, default=default): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 min=1,
                 max=86400,
@@ -39,7 +41,7 @@ def _timeout_schema(default: float) -> dict:
     }
 
 
-def _valid_timeout(value: Any) -> bool:
+def _valid_seconds(value: Any) -> bool:
     return (
         isinstance(value, (int, float))
         and not isinstance(value, bool)
@@ -61,13 +63,17 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="mqtt_required")
         errors = {}
         if user_input is not None:
+            user_input = dict(user_input)
+            user_input.setdefault(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
             topic = user_input[CONF_TOPIC]
             try:
                 mqtt.valid_publish_topic(topic)  # Exact topic: wildcards are unsafe.
             except (vol.Invalid, ValueError, TypeError):
                 errors[CONF_TOPIC] = "invalid_topic"
-            if not _valid_timeout(user_input[CONF_TIMEOUT]):
+            if not _valid_seconds(user_input[CONF_TIMEOUT]):
                 errors[CONF_TIMEOUT] = "invalid_timeout"
+            if not _valid_seconds(user_input[CONF_UPDATE_INTERVAL]):
+                errors[CONF_UPDATE_INTERVAL] = "invalid_update_interval"
             if not errors:
                 await self.async_set_unique_id(topic)
                 self._abort_if_unique_id_configured()
@@ -80,9 +86,14 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_TOPIC, default=defaults.get(CONF_TOPIC, DEFAULT_TOPIC)
+                        CONF_TOPIC,
+                        default=defaults.get(CONF_TOPIC, DEFAULT_TOPIC),
                     ): str,
-                    **_timeout_schema(defaults.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)),
+                    **_seconds_schema(defaults.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)),
+                    **_seconds_schema(
+                        defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+                        CONF_UPDATE_INTERVAL,
+                    ),
                 }
             ),
             errors=errors,
@@ -105,9 +116,16 @@ class SnifferOptionsFlow(OptionsFlow):
         default_sign = self.config_entry.options.get(
             CONF_GRID_IMPORT_SIGN, DEFAULT_GRID_IMPORT_SIGN
         )
+        default_interval = self.config_entry.options.get(
+            CONF_UPDATE_INTERVAL,
+            self.config_entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+        )
         if user_input is not None:
+            interval = user_input.get(CONF_UPDATE_INTERVAL, default_interval)
+            if not _valid_seconds(interval):
+                errors[CONF_UPDATE_INTERVAL] = "invalid_update_interval"
             sign = user_input.get(CONF_GRID_IMPORT_SIGN, default_sign)
-            if not _valid_timeout(user_input[CONF_TIMEOUT]):
+            if not _valid_seconds(user_input[CONF_TIMEOUT]):
                 errors[CONF_TIMEOUT] = "invalid_timeout"
             if sign not in ("positive", "negative"):
                 errors[CONF_GRID_IMPORT_SIGN] = "invalid_direction"
@@ -123,6 +141,7 @@ class SnifferOptionsFlow(OptionsFlow):
                 options.update(
                     {
                         CONF_TIMEOUT: user_input[CONF_TIMEOUT],
+                        CONF_UPDATE_INTERVAL: interval,
                         CONF_GRID_IMPORT_SIGN: sign,
                     }
                 )
@@ -131,7 +150,8 @@ class SnifferOptionsFlow(OptionsFlow):
             CONF_TIMEOUT, self.config_entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
         )
         schema = {
-            **_timeout_schema(default),
+            **_seconds_schema(default),
+            **_seconds_schema(default_interval, CONF_UPDATE_INTERVAL),
             vol.Required(
                 CONF_GRID_IMPORT_SIGN, default=default_sign
             ): selector.SelectSelector(
