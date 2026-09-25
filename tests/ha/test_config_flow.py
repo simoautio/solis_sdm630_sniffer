@@ -365,3 +365,70 @@ async def test_request_only_diagnostics_recovery_and_reconnect(hass, mqtt_transp
         assert diagnostics["traffic_status"] == "no_recent_requests_or_paired_responses"
     finally:
         runtime.async_stop()
+
+
+@pytest.mark.parametrize("existing_mode", ["logger", "both"])
+@pytest.mark.parametrize("new_mode", ["logger", "both"])
+async def test_duplicate_logger_across_modes(
+    hass, mqtt_transport, existing_mode, new_mode
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="logger_logger.test" if existing_mode == "logger" else "old/topic",
+        data={} if existing_mode == "logger" else {"topic": "old/topic"},
+        options={"logger_host": "LOGGER.TEST"},
+    )
+    entry.add_to_hass(hass)
+    with patch(SKIP_SETUP, return_value=True):
+        form = await start_setup(hass, new_mode)
+        if new_mode == "both":
+            form = await hass.config_entries.flow.async_configure(
+                form["flow_id"], {"topic": "new/topic", "timeout": 60}
+            )
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"],
+            {"logger_host": "logger.test", "logger_port": 502, "logger_unit": 1},
+        )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+
+
+@pytest.mark.parametrize("data", [{}, {"topic": "new/topic"}])
+async def test_duplicate_logger_options_retry_and_self(hass, data):
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        data={"topic": "old/topic"},
+        options={"logger_host": "LOGGER.TEST"},
+    )
+    other.add_to_hass(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=data, options={"logger_host": "own.test"}
+    )
+    entry.add_to_hass(hass)
+    form = await open_options(hass, entry, "logger")
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], {"logger_host": "logger.test"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"logger_host": "logger_already_configured"}
+    assert entry.options["logger_host"] == "own.test"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"logger_host": "own.test", "logger_interval": 60}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["logger_interval"] == 60
+
+
+@pytest.mark.parametrize("endpoint", [{"logger_port": 503}, {"logger_unit": 2}])
+async def test_distinct_logger_endpoints_allowed(hass, endpoint):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={}, options={"logger_host": "logger.test"}
+    )
+    entry.add_to_hass(hass)
+    with patch(SKIP_SETUP, return_value=True):
+        form = await start_setup(hass, "logger")
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "logger.test", **endpoint}
+        )
+    assert result["type"] == FlowResultType.CREATE_ENTRY

@@ -219,3 +219,83 @@ async def test_logger_only_setup(hass, mqtt_transport):
         )
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_continuous_polling_checkpoints_before_shutdown(
+    runtime, hass, hass_storage, freezer
+):
+    """A crash must not lose all energy accumulated during healthy polling."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    from custom_components.solis_sdm630_sniffer.const import DOMAIN
+
+    async def read(address, count):
+        if address == 33000:
+            return (0x3306, 15, 27, 1)
+        if address == 33147:
+            return (0, 0, 0, 0, 0, 1000)
+        return (0,) * count
+
+    client = AsyncMock()
+    client.read.side_effect = read
+    runtime._schedule = lambda delay: None
+    await runtime.async_start()
+    start = dt_util.utcnow()
+    key = f"{DOMAIN}.test-entry.energy"
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as factory:
+        factory.return_value.__aenter__ = AsyncMock(return_value=client)
+        factory.return_value.__aexit__ = AsyncMock()
+        try:
+            for seconds in (0, 30, 60, 90, 120, 150):
+                freezer.move_to(start + timedelta(seconds=seconds))
+                await runtime.async_poll()
+                async_fire_time_changed(hass, dt_util.utcnow())
+                await hass.async_block_till_done()
+                if seconds == 90:
+                    assert key in hass_storage, "No checkpoint during healthy polling"
+                    first = hass_storage[key]["data"]["solar"]
+                    assert first > 0
+            assert hass_storage[key]["data"]["solar"] > first
+        finally:
+            await runtime.async_stop()
+
+
+async def test_expiry_notifies_for_each_register_deadline(runtime, hass, freezer):
+    """Later register groups must expire even while the next poll is stalled."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    runtime._running = True
+    start = dt_util.utcnow()
+    stamp = runtime.clock()
+    runtime.values = {"model": "0x3306", "temperature": 25, "frequency": 50}
+    runtime.updated_at = {
+        "model": stamp,
+        "temperature": stamp + 10,
+        "frequency": stamp + 20,
+    }
+    observed = []
+    runtime.async_add_listener(lambda: observed.append(set(runtime.values)))
+    try:
+        freezer.move_to(start + timedelta(seconds=65))
+        runtime._expire(None)  # First group's deadline has fired.
+        assert observed == [{"temperature", "frequency"}]
+        freezer.move_to(start + timedelta(seconds=75))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert observed[-1] == {"frequency"}
+        freezer.move_to(start + timedelta(seconds=85))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert observed[-1] == set()
+        assert not runtime.updated_at
+        assert runtime._cancel_expiry is None
+    finally:
+        await runtime.async_stop()
