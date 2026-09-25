@@ -244,6 +244,7 @@ async def test_continuous_polling_checkpoints_before_shutdown(
     runtime._schedule = lambda delay: None
     await runtime.async_start()
     start = dt_util.utcnow()
+    runtime.clock = lambda: (dt_util.utcnow() - start).total_seconds()
     key = f"{DOMAIN}.test-entry.energy"
     with patch(
         "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
@@ -274,6 +275,7 @@ async def test_expiry_notifies_for_each_register_deadline(runtime, hass, freezer
 
     runtime._running = True
     start = dt_util.utcnow()
+    runtime.clock = lambda: (dt_util.utcnow() - start).total_seconds()
     stamp = runtime.clock()
     runtime.values = {"model": "0x3306", "temperature": 25, "frequency": 50}
     runtime.updated_at = {

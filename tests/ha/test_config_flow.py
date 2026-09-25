@@ -423,7 +423,10 @@ async def test_duplicate_logger_options_retry_and_self(hass, data):
 @pytest.mark.parametrize("endpoint", [{"logger_port": 503}, {"logger_unit": 2}])
 async def test_distinct_logger_endpoints_allowed(hass, endpoint):
     entry = MockConfigEntry(
-        domain=DOMAIN, data={}, options={"logger_host": "logger.test"}
+        domain=DOMAIN,
+        unique_id="logger_logger.test",
+        data={},
+        options={"logger_host": "logger.test"},
     )
     entry.add_to_hass(hass)
     with patch(SKIP_SETUP, return_value=True):
