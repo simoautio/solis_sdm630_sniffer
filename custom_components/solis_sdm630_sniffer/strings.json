@@ -34,7 +34,8 @@
       "invalid_timeout": "Enter a timeout between 1 and 86400 seconds.",
       "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
       "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
-      "logger_required": "Enter the logger's IP address or hostname."
+      "logger_required": "Enter the logger's IP address or hostname.",
+      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry."
     },
     "abort": {
       "mqtt_required": "Configure and enable the built-in MQTT integration first.",
@@ -88,7 +89,8 @@
       "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
       "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
       "invalid_helper_selection": "Select only the listed cycles and sources.",
-      "logger_required": "This entry only monitors the inverter, so a logger address is required. Remove the integration to stop monitoring."
+      "logger_required": "This entry only monitors the inverter, so a logger address is required. Remove the integration to stop monitoring.",
+      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry."
     }
   },
   "selector": {

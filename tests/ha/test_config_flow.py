@@ -435,3 +435,31 @@ async def test_distinct_logger_endpoints_allowed(hass, endpoint):
             form["flow_id"], {"logger_host": "logger.test", **endpoint}
         )
     assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_logger_address_change_releases_old_endpoint(hass):
+    """Changing the host keeps the entry but allows reuse of the old address."""
+    with patch(SKIP_SETUP, return_value=True):
+        form = await start_setup(hass, "logger")
+        created = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "old.test"}
+        )
+        entry = created["result"]
+        entry_id = entry.entry_id
+        form = await open_options(hass, entry, "logger")
+        changed = await hass.config_entries.options.async_configure(
+            form["flow_id"], {"logger_host": "new.test"}
+        )
+        assert changed["type"] == FlowResultType.CREATE_ENTRY
+        assert entry.entry_id == entry_id
+        assert entry.options["logger_host"] == "new.test"
+        form = await start_setup(hass, "logger")
+        reused = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "old.test"}
+        )
+        assert reused["type"] == FlowResultType.CREATE_ENTRY
+        form = await start_setup(hass, "logger")
+        duplicate = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "NEW.TEST."}
+        )
+        assert duplicate["reason"] == "already_configured"

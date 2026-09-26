@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Checkpoint estimated energy during continuous polling without repeatedly postponing disk writes.
+- Expire every logger register group at its own freshness deadline, including when a poll stalls.
+- Prevent duplicate logger endpoints across combined and inverter-only setup and Configure, while allowing distinct ports or unit IDs.
+
 ## 0.5.1
 
 - Add **Meter mounted in reverse** (Configure → Meter) for meters whose import/export counters are swapped. The Import and Export energy entities (including per-phase) swap labels and helper sources; each entity keeps one continuous history, so statistics see no false jumps.

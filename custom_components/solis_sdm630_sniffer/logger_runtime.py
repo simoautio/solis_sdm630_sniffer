@@ -63,6 +63,7 @@ class LoggerRuntime:
         self._task = None
         self._running = False
         self._loaded = False
+        self._save_pending = False
 
     async def async_start(self):
         data = await self.store.async_load() or {}
@@ -96,6 +97,11 @@ class LoggerRuntime:
 
     def _stored_data(self):
         return {"solar": self.solar.total, "household": self.household.total}
+
+    def _checkpoint_data(self):
+        """Capture current totals and allow the next bounded checkpoint."""
+        self._save_pending = False
+        return self._stored_data()
 
     @property
     def running(self) -> bool:
@@ -189,7 +195,9 @@ class LoggerRuntime:
             self.update_combined(now)
             self.failures = 0
             self.last_error = None
-            self.store.async_delay_save(self._stored_data, 60)
+            if not self._save_pending:
+                self._save_pending = True
+                self.store.async_delay_save(self._checkpoint_data, 60)
         except (OSError, TimeoutError, ModbusError) as err:
             self.failures += 1
             # Error type only: network exceptions can contain private hostnames.
@@ -203,25 +211,25 @@ class LoggerRuntime:
         finally:
             if self._running:
                 self._notify()
-                if self._cancel_expiry:
-                    self._cancel_expiry()
-                if self.updated_at:
-                    delay = max(
-                        0,
-                        min(self.updated_at.values())
-                        + 2 * self.interval
-                        + 5
-                        - self.clock(),
-                    )
-                    self._cancel_expiry = async_call_later(
-                        self.hass, delay, self._expire
-                    )
+                self._schedule_expiry()
                 delay = (
                     min(300, self.interval * 2 ** min(self.failures, 5))
                     if self.failures
                     else max(0, self.interval - (self.clock() - started))
                 )
                 self._schedule(delay)
+
+    def _schedule_expiry(self):
+        """Keep a timer for the earliest remaining register deadline."""
+        if self._cancel_expiry:
+            self._cancel_expiry()
+            self._cancel_expiry = None
+        if self._running and self.updated_at:
+            delay = max(
+                0,
+                min(self.updated_at.values()) + 2 * self.interval + 5 - self.clock(),
+            )
+            self._cancel_expiry = async_call_later(self.hass, delay, self._expire)
 
     @callback
     def _expire(self, _now):
@@ -234,10 +242,12 @@ class LoggerRuntime:
         if expired:
             self.solar.update(now, None)
             self.household.update(now, None)
-            self.values.pop("solar_ac_power", None)
-            self.values.pop("estimated_solar_energy", None)
+            for key in ("solar_ac_power", "estimated_solar_energy"):
+                self.values.pop(key, None)
+                self.updated_at.pop(key, None)
             self._invalidate_household()
             self._notify()
+        self._schedule_expiry()
 
     def _invalidate_household(self):
         for key in ("household_power", "estimated_household_energy"):

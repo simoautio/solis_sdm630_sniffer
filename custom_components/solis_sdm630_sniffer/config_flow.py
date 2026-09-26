@@ -103,6 +103,30 @@ def _logger_options(user_input: dict, current: dict, errors: dict) -> dict:
     return options
 
 
+def _logger_endpoint(options: dict) -> tuple[str, int, int]:
+    """Compare current endpoints, including defaults on older entries."""
+    return (
+        options.get(CONF_LOGGER_HOST, "").strip().lower().rstrip("."),
+        int(options.get(CONF_LOGGER_PORT, DEFAULT_LOGGER_PORT)),
+        int(options.get(CONF_LOGGER_UNIT, DEFAULT_LOGGER_UNIT)),
+    )
+
+
+def _logger_unique_id(options: dict) -> str:
+    host, port, unit = _logger_endpoint(options)
+    return f"logger_{host}_{port}_{unit}"
+
+
+def _logger_configured(hass, options: dict, entry_id: str | None = None) -> bool:
+    endpoint = _logger_endpoint(options)
+    return any(
+        entry.entry_id != entry_id
+        and entry.options.get(CONF_LOGGER_HOST)
+        and _logger_endpoint(entry.options) == endpoint
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    )
+
+
 def _host_schema(host: str | None) -> dict:
     return {vol.Optional(CONF_LOGGER_HOST, description={"suggested_value": host}): str}
 
@@ -254,10 +278,10 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
             if not logger:
                 errors[CONF_LOGGER_HOST] = "logger_required"
             if not errors:
+                if _logger_configured(self.hass, logger):
+                    return self.async_abort(reason="already_configured")
                 if not self._meter:
-                    await self.async_set_unique_id(
-                        f"logger_{logger[CONF_LOGGER_HOST].lower()}"
-                    )
+                    await self.async_set_unique_id(_logger_unique_id(logger))
                     self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=METER_TITLE if self._meter else LOGGER_TITLE,
@@ -290,13 +314,21 @@ class SnifferOptionsFlow(OptionsFlow):
             menu.insert(0, "meter")
         return self.async_show_menu(step_id="init", menu_options=menu)
 
-    def _save(self, changes: dict, keep_logger: bool = True) -> FlowResult:
+    def _save(
+        self, changes: dict, keep_logger: bool = True, logger_identity: bool = False
+    ) -> FlowResult:
         options = {
             key: value
             for key, value in self.config_entry.options.items()
             if keep_logger or not key.startswith("logger_")
         }
         options.update(changes)
+        if logger_identity:
+            # Update options and mutable endpoint identity together, triggering
+            # only one reload. Entity and storage identities use entry_id.
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, options=options, unique_id=_logger_unique_id(options)
+            )
         return self.async_create_entry(title="", data=options)
 
     async def async_step_meter(
@@ -369,8 +401,18 @@ class SnifferOptionsFlow(OptionsFlow):
             logger = _logger_options(user_input, current, errors)
             if not logger and not _has_meter(self.config_entry):
                 errors[CONF_LOGGER_HOST] = "logger_required"
+            if (
+                not errors
+                and logger
+                and _logger_configured(self.hass, logger, self.config_entry.entry_id)
+            ):
+                errors[CONF_LOGGER_HOST] = "logger_already_configured"
             if not errors:
-                return self._save(logger, keep_logger=False)
+                return self._save(
+                    logger,
+                    keep_logger=False,
+                    logger_identity=not _has_meter(self.config_entry),
+                )
         schema = _logger_schema(current)
         return self.async_show_form(
             step_id="logger",

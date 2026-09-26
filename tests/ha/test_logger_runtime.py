@@ -301,3 +301,23 @@ async def test_expiry_notifies_for_each_register_deadline(runtime, hass, freezer
         assert runtime._cancel_expiry is None
     finally:
         await runtime.async_stop()
+
+
+async def test_expiry_removes_derived_timestamps_and_stop_cancels_timer(runtime):
+    """Invalidated estimates must not leave a deadline that fires forever."""
+    runtime._running = True
+    runtime.clock = lambda: 65
+    runtime.values = {
+        "model": "0x3306",
+        "ac_grid_power": 1000,
+        "solar_ac_power": 1000,
+        "estimated_solar_energy": 1,
+    }
+    runtime.updated_at = {key: 10 for key in runtime.values}
+    runtime.updated_at["model"] = 0
+    runtime._expire(None)
+    assert set(runtime.values) == {"ac_grid_power"}
+    assert runtime.updated_at == {"ac_grid_power": 10}
+    assert runtime._cancel_expiry is not None
+    await runtime.async_stop()
+    assert runtime._cancel_expiry is None
