@@ -21,12 +21,15 @@
 - Defaults and hostname case must match; different ports/unit IDs remain distinct.
 
 ## Tasks
-- [ ] Add failing HA regressions for persisted totals under continuous polling, successive expiry deadlines, cross-mode duplicate setup, and duplicate Configure with retry.
-- [ ] Push a test branch and confirm expected failures in CI.
-- [ ] Guard outstanding delayed saves with a pending flag cleared when the data callback runs; retain stop-time save.
-- [ ] Extract expiry scheduling, call it after polls and expiry callbacks, and remove timestamps together with invalidated derived values.
-- [ ] Compare normalized (host, port, unit) tuples against current entry options in setup and Configure; return an abort on duplicate setup and a retryable field error in Configure. Preserve existing IDs.
-- [ ] Run standalone tests, lint, format, compilation, and both HA CI matrices; independently review changes.
-- [ ] Update changelog, fast-forward main, and push the verified result to GitHub.
+- [x] Add failing HA regressions for persisted totals under continuous polling, successive expiry deadlines, cross-mode duplicate setup, and duplicate Configure with retry.
+- [x] Push a test branch and confirm expected failures in CI.
+- [x] Guard outstanding delayed saves with a pending flag cleared when the data callback runs; retain stop-time save.
+- [x] Extract expiry scheduling, call it after polls and expiry callbacks, and remove timestamps together with invalidated derived values.
+- [x] Compare normalized (host, port, unit) tuples against current entry options in setup and Configure; return an abort on duplicate setup and a retryable field error in Configure. Preserve existing IDs.
+- [x] Run standalone tests, lint, format, compilation, and both HA CI matrices; independently review changes.
+- [x] Update changelog, fast-forward main, and push the verified result to GitHub.
 
 Ruling: proceed inline without another plan approval because the user explicitly authorized the concrete fixes. Use an isolated temporary worktree and a dedicated CI branch. Baseline: 69 standalone tests pass.
+
+Verification 2026-09-26: regression-only CI 36179148360 reproduced the faults; fixed commit 381ed6e passed standalone and Home Assistant 2026.1.0 / 2026.9.3 in CI 36210568332. Both HA matrices: 149 passed each. Local standalone: 69 passed; Ruff and Python 3.13 compilation passed. Independent review found no important issues. Changelog updated; GitHub main deployment follows this documentation commit.
+Ruling: logger-only config-entry endpoint IDs now include host, port and unit, and change atomically with options to avoid duplicate reloads. Existing entity/device/storage identities remain based on unchanged entry_id.
