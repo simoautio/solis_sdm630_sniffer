@@ -4,6 +4,8 @@
 
 A Home Assistant custom integration that **passively reads Eastron SDM630MCT meter traffic** captured by a PUSR USR-DR134 serial-to-MQTT gateway. Intended for an existing Solis-to-meter RS485 link.
 
+> **AI-coded project:** this integration was written with AI coding assistants (Claude Code), directed and reviewed by the maintainer. Automated tests run in CI, but it has only been tested on one installation. Review the code and verify the readings against your own hardware before relying on it.
+
 At setup, choose what to monitor:
 
 | Mode | What it does | Needs |
