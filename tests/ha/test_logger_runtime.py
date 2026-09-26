@@ -374,7 +374,7 @@ async def test_unsupported_model_is_reported_immediately(runtime, hass):
         "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
     ) as reader:
         reader.return_value.__aenter__ = AsyncMock(return_value=client)
-        reader.return_value.__aexit__ = AsyncMock()
+        reader.return_value.__aexit__ = AsyncMock(return_value=False)
         await runtime.async_poll()
     assert runtime.last_error == "UnsupportedModel"
     issue = ir.async_get(hass).async_get_issue(
@@ -402,7 +402,7 @@ async def test_probe_logger(enter, expected):
     with patch(
         "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
     ) as reader:
-        reader.return_value.__aexit__ = AsyncMock()
+        reader.return_value.__aexit__ = AsyncMock(return_value=False)
         reader.return_value.__aenter__ = AsyncMock(
             side_effect=enter if isinstance(enter, Exception) else None,
             return_value=client,
