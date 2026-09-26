@@ -31,6 +31,8 @@
 
 ### Task 1: Document the DR134 passive-sniffer topology
 
+**Status:** done (5349ef4).
+
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/implementation/combined-monitoring.md`
@@ -39,7 +41,7 @@
 **Interfaces:**
 - Produces user-facing installation and troubleshooting wording; no Python API changes.
 
-- [ ] **Step 1: Write the documentation acceptance checklist**
+- [x] **Step 1: Write the documentation acceptance checklist**
 
 The README must explicitly name the PUSR USR-DR134 as the passive sniffer and show these paths:
 
@@ -53,21 +55,21 @@ S2-WL-ST logger ── read-only Modbus TCP ── Home Assistant logger runtime
 
 State that the DR134 listens to the existing bus, captures both master requests and meter responses, and must not be configured to poll, write, forward MQTT commands to RS485, or inject heartbeats into the capture stream.
 
-- [ ] **Step 2: Update the README**
+- [x] **Step 2: Update the README**
 
 Add a “Hardware and data flow” section, rename or clarify “Gateway setup” as “PUSR USR-DR134 passive sniffer setup,” link the official PUSR product/manual pages, and explain raw binary payloads, exact MQTT topics, serial settings, retained messages, and frame boundaries.
 
 Add a short comparison explaining that the S2-WL-ST connection is separate and actively polled read-only. Replace any wording that implies sustained SolisCloud coexistence has already been proven with the verified limitation: no logger settings or cloud writes are made, while long-running cloud coexistence remains a site-acceptance check.
 
-- [ ] **Step 3: Update implementation documentation and review links**
+- [x] **Step 3: Update implementation documentation and review links**
 
 Record the two-path topology, the DR134’s passive role, and the upstream repository’s useful ideas without copying control or battery-management features. Link https://github.com/Pho3niX90/solis_modbus and note that its register definitions are reference material requiring validation against this inverter firmware.
 
-- [ ] **Step 4: Verify documentation**
+- [x] **Step 4: Verify documentation**
 
 Run `rg -n -i "DR134|passive|S2-WL-ST|Modbus TCP|raw binary" README.md docs` and inspect the rendered Markdown sections for contradictory setup instructions.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs
@@ -75,6 +77,8 @@ git commit -m "docs: explain DR134 passive meter capture topology"
 ```
 
 ### Task 2: Split logger polling into live, slow, and startup groups
+
+**Status:** dropped — see ruling in `docs/implementation/combined-monitoring.md` (snapshot-wide freshness; ~3 reads saved).
 
 **Files:**
 - Modify: `custom_components/solis_sdm630_sniffer/inverter_registers.py`
@@ -127,6 +131,8 @@ git commit -m "feat: separate logger live and slow polling groups"
 
 ### Task 3: Add sustained logger failure Repairs diagnostics
 
+**Status:** done; HA CI green on 2026.1.0 and 2026.9.3.
+
 **Files:**
 - Modify: `custom_components/solis_sdm630_sniffer/logger_runtime.py`
 - Modify: `custom_components/solis_sdm630_sniffer/diagnostics.py`
@@ -137,19 +143,19 @@ git commit -m "feat: separate logger live and slow polling groups"
 - Add a stable issue ID such as `logger_unreachable_<entry_id>`.
 - Add a runtime success/failure counter and last-success timestamp to redacted diagnostics.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Test that five consecutive failed polls create one non-fixable error Repairs issue, a successful poll clears it, and unload clears it. Test that one failure does not create an issue and that diagnostics expose only error type, failure count, poll duration, and ages—not host, raw frames, or credentials.
 
-- [ ] **Step 2: Run tests to verify expected failure**
+- [x] **Step 2: Run tests to verify expected failure**
 
 Run `pytest tests/ha/test_logger_runtime.py -k "repair\|failure\|diagnostic" -v`; expect missing issue behavior or missing fields.
 
-- [ ] **Step 3: Implement issue lifecycle**
+- [x] **Step 3: Implement issue lifecycle**
 
 Use `homeassistant.helpers.issue_registry` from the runtime. Create the issue after exactly five consecutive failures, clear on the next successful completed cycle, and clear during `async_stop()`. Keep the existing redacted diagnostics contract and do not include the configured host in issue placeholders unless the existing diagnostics privacy policy explicitly permits it; prefer the entry title and failure age.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run the focused HA tests, then:
 
@@ -159,6 +165,8 @@ git commit -m "feat: report sustained logger failures as a repair"
 ```
 
 ### Task 4: Add opt-in extended read-only telemetry
+
+**Status:** dropped — live probe: 33157 duplicates 33079; 33186–33189 read zero. See implementation ledger.
 
 **Files:**
 - Modify: `custom_components/solis_sdm630_sniffer/inverter_registers.py`
@@ -203,11 +211,13 @@ git commit -m "feat: add opt-in extended inverter telemetry"
 
 ### Task 5: Full validation and deployment handoff
 
+**Status:** local checks and CI done; changelog updated. Awaiting review before merge.
+
 **Files:**
 - Modify: `CHANGELOG.md` only after all tests pass.
 - Review: all changed files and generated Home Assistant translations.
 
-- [ ] **Step 1: Run local checks**
+- [x] **Step 1: Run local checks**
 
 ```bash
 .venv/bin/ruff check .
@@ -216,7 +226,7 @@ git commit -m "feat: add opt-in extended inverter telemetry"
 .venv/bin/pytest -q
 ```
 
-- [ ] **Step 2: Run CI compatibility matrices**
+- [x] **Step 2: Run CI compatibility matrices**
 
 Push the branch and require both Home Assistant matrix jobs (2026.1.x and the current supported 2026.x version) plus standalone CI to pass. Home Assistant tests are not run locally by project policy.
 
@@ -224,7 +234,7 @@ Push the branch and require both Home Assistant matrix jobs (2026.1.x and the cu
 
 Confirm the DR134 wording is accurate, extended telemetry is visibly opt-in, issue diagnostics are redacted, existing entity IDs are unchanged, and the Energy Dashboard guidance still prefers the authoritative meter counters for grid energy.
 
-- [ ] **Step 4: Update changelog and commit**
+- [x] **Step 4: Update changelog and commit**
 
 Add an Unreleased entry describing DR134 documentation, logger polling groups, sustained-failure Repairs, and opt-in telemetry. Do not claim hardware validation for unverified registers.
 
