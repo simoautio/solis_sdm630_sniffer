@@ -55,7 +55,22 @@ Download a release or clone this repository. Copy the directory
 
 Restart Home Assistant, then add the integration through Settings as above. Do not add YAML sensor definitions or broker credentials for this integration; it uses the existing MQTT connection.
 
-## Gateway setup
+## Hardware and data flow
+
+```text
+Solis inverter ── existing RS485 bus ── SDM630MCT
+                              │
+                              └── USR-DR134 ── raw MQTT ── Home Assistant meter runtime
+
+S2-WL-ST logger ── read-only Modbus TCP ── Home Assistant logger runtime
+```
+
+The two paths are independent:
+
+- The **PUSR USR-DR134** only *listens* to the existing Solis-to-meter bus. It captures the inverter's requests and the meter's responses and publishes the raw bytes to MQTT. It must not poll, write, forward MQTT commands to RS485, or inject heartbeats into the capture stream.
+- The **S2-WL-ST** logger is *actively* polled by Home Assistant, read-only (Modbus function 04). See [Local inverter](#local-inverter-optional).
+
+## PUSR USR-DR134 passive sniffer setup
 
 Configure the USR-DR134 to forward the observed serial stream transparently to the chosen MQTT topic:
 
@@ -178,7 +193,7 @@ With a battery, configure its charge/discharge sources separately before interpr
 
 Choose **Inverter only** or **Meter and inverter** when adding the integration and enter the S2-WL-ST logger's IP address, or add it later to a meter entry in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
 
-- **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and logger settings and SolisCloud reporting are not changed. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
+- **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and no logger settings or cloud settings are changed. Long-running SolisCloud reporting alongside local polling has not been proven yet; confirm on your site that cloud timestamps keep advancing. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
 - Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: ModbusError` in diagnostics and stay unavailable.
 - Entities live on a separate **Solis inverter** device. Meter entities, IDs and history are unchanged. A logger outage never affects meter availability and vice versa.
 - After failed polls, retries back off up to five minutes. Stale values become **unavailable**, never zero.
