@@ -191,10 +191,10 @@ With a battery, configure its charge/discharge sources separately before interpr
 
 ## Local inverter (optional)
 
-Choose **Inverter only** or **Meter and inverter** when adding the integration and enter the S2-WL-ST logger's IP address, or add it later to a meter entry in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling.
+Choose **Inverter only** or **Meter and inverter** when adding the integration and enter the S2-WL-ST logger's IP address, or add it later to a meter entry in **Configure → Inverter logger** (port 502, unit 1 and a 30 s polling interval by default; 10–3600 s). Leave it empty to disable polling. Before a new address is saved, the integration makes one read-only identity read; if the logger can't be reached or reports another model, the form shows an error instead of saving.
 
 - **Read-only**: only Modbus function 04 (read input registers) is implemented. Nothing is written to the inverter or logger, and no logger settings or cloud settings are changed. Long-running SolisCloud reporting alongside local polling has not been proven yet; confirm on your site that cloud timestamps keep advancing. Requests are serialized, at most 50 registers each, at least 350 ms apart, over one short-lived connection per poll.
-- Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: ModbusError` in diagnostics and stay unavailable.
+- Only model code `0x3306` (S6-EH3P 5–10K-H) is accepted; other models report `last_error: UnsupportedModel` in diagnostics, raise an *Unsupported Solis inverter model* repair, and stay unavailable.
 - Entities live on a separate **Solis inverter** device. Meter entities, IDs and history are unchanged. A logger outage never affects meter availability and vice versa.
 - After failed polls, retries back off up to five minutes. Stale values become **unavailable**, never zero.
 
@@ -215,7 +215,7 @@ For the Energy dashboard, keep the meter's **Import/Export energy** for the grid
 
 Download diagnostics from the integration's menu. With a logger configured, a `logger` section shows the port, unit, poll failures, last error type, unsupported registers and value ages; the logger host is redacted. They also include traffic status, frame counters, buffer size, last/pending request metadata, and sample ages. The topic is redacted, and raw payload history is not included.
 
-The `traffic_status` field describes recognized traffic within the configured availability timeout:
+The **Meter traffic status** diagnostic sensor (updated every 30 s) and the `traffic_status` diagnostics field describe recognized traffic within the configured availability timeout:
 
 | Status | Meaning |
 | --- | --- |

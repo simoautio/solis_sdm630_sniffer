@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3
+
+- Adding or changing the logger address now checks the logger with one read-only identity read, and shows *Could not read the logger* or *unsupported model* instead of saving a setup that never works. Changing only the polling interval does not need the logger online.
+- An inverter other than model 0x3306 reports `UnsupportedModel` in diagnostics and raises its own Repairs issue immediately, instead of looking like a network fault.
+- New **Meter traffic status** diagnostic sensor on the meter device: receiving replies, requests without replies, no recent traffic, or disconnected.
+
 ## 0.5.2
 
 - Show a Repairs issue after five consecutive failed logger polls; it clears on the next successful poll or unload. Diagnostics add last-success age and poll duration. The logger host is never included.
