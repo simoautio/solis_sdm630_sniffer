@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
 
 - Show a Repairs issue after five consecutive failed logger polls; it clears on the next successful poll or unload. Diagnostics add last-success age and poll duration. The logger host is never included.
 - Document the PUSR USR-DR134 as a passive capture path, separate from the actively polled (read-only) S2-WL-ST logger.
