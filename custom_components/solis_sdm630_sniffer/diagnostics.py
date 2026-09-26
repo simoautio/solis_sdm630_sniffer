@@ -25,6 +25,12 @@ async def async_get_config_entry_diagnostics(
                 "running": logger.running,
                 "failures": logger.failures,
                 "last_error": logger.last_error,
+                "last_success_age": (
+                    logger.clock() - logger.last_success_at
+                    if logger.last_success_at is not None
+                    else None
+                ),
+                "last_poll_duration": logger.last_poll_duration,
                 "balance_status": logger.balance_status,
                 "unsupported": sorted(logger.unsupported),
                 "identity": {

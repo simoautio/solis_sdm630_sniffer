@@ -7,6 +7,7 @@ from contextlib import suppress
 from time import monotonic
 
 from homeassistant.core import callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
@@ -27,6 +28,8 @@ from .inverter_registers import BLOCKS, REGISTERS
 from .modbus_tcp import ModbusError, ModbusReader, UnsupportedRegisters
 
 _LOGGER = logging.getLogger(__name__)
+
+REPAIR_AFTER_FAILURES = 5
 
 
 def energy_store(hass, entry_id) -> Store:
@@ -52,8 +55,11 @@ class LoggerRuntime:
         self.listeners: set[Callable[[], None]] = set()
         self.solar, self.household = EnergyEstimate(), EnergyEstimate()
         self.store = energy_store(hass, entry_id)
+        self.issue_id = f"logger_unreachable_{entry_id}"
         self.failures = 0
         self.last_error = None
+        self.last_success_at = None
+        self.last_poll_duration = None
         self.balance_status = "waiting_for_sources"
         self.unsupported: set[str] = set()
         self._split_blocks = set()
@@ -93,6 +99,7 @@ class LoggerRuntime:
             self._task = None
         if self._loaded:  # Never overwrite totals that failed to load.
             await self.store.async_save(self._stored_data())
+        ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
         self.listeners.clear()
 
     def _stored_data(self):
@@ -195,6 +202,9 @@ class LoggerRuntime:
             self.update_combined(now)
             self.failures = 0
             self.last_error = None
+            self.last_success_at = now
+            self.last_poll_duration = now - started
+            ir.async_delete_issue(self.hass, DOMAIN, self.issue_id)
             if not self._save_pending:
                 self._save_pending = True
                 self.store.async_delay_save(self._checkpoint_data, 60)
@@ -208,6 +218,16 @@ class LoggerRuntime:
             self.household.update(self.clock(), None)
             self.balance_status = "logger_unavailable"
             _LOGGER.debug("Logger polling failed: %s", self.last_error)
+            if self.failures == REPAIR_AFTER_FAILURES:
+                # No placeholders: the host is private and stays out of Repairs.
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    self.issue_id,
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="logger_unreachable",
+                )
         finally:
             if self._running:
                 self._notify()

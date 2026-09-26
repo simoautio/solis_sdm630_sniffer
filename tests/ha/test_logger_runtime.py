@@ -154,6 +154,7 @@ async def test_setup_independence_restore_and_redaction(
         diagnostics = json.dumps(await async_get_config_entry_diagnostics(hass, entry))
         assert "192.0.2.10" not in diagnostics
         assert '"last_error": "TimeoutError"' in diagnostics
+        assert '"last_success_age": null' in diagnostics
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
@@ -321,3 +322,42 @@ async def test_expiry_removes_derived_timestamps_and_stop_cancels_timer(runtime)
     assert runtime._cancel_expiry is not None
     await runtime.async_stop()
     assert runtime._cancel_expiry is None
+
+
+async def test_sustained_failures_raise_and_clear_repair(runtime, hass):
+    from homeassistant.helpers import issue_registry as ir
+
+    issue_id = "logger_unreachable_test-entry"
+    registry = ir.async_get(hass)
+    client = AsyncMock()
+    client.read.side_effect = lambda address, count: (
+        (0x3306, 15, 27, 1) if address == 33000 else (0,) * count
+    )
+    healthy = AsyncMock(return_value=client)
+    runtime._running = True
+    runtime._schedule = lambda delay: None
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
+        reader.return_value.__aexit__ = AsyncMock()
+        reader.return_value.__aenter__ = AsyncMock(side_effect=TimeoutError)
+        await runtime.async_poll()
+        assert registry.async_get_issue("solis_sdm630_sniffer", issue_id) is None
+        for _ in range(4):
+            await runtime.async_poll()
+        issue = registry.async_get_issue("solis_sdm630_sniffer", issue_id)
+        assert issue.severity == ir.IssueSeverity.ERROR
+        assert not issue.is_fixable
+        assert "example.test" not in str(issue.translation_placeholders)
+
+        reader.return_value.__aenter__ = healthy
+        await runtime.async_poll()
+        assert runtime.failures == 0
+        assert registry.async_get_issue("solis_sdm630_sniffer", issue_id) is None
+
+        reader.return_value.__aenter__ = AsyncMock(side_effect=TimeoutError)
+        for _ in range(5):
+            await runtime.async_poll()
+    assert registry.async_get_issue("solis_sdm630_sniffer", issue_id)
+    await runtime.async_stop()
+    assert registry.async_get_issue("solis_sdm630_sniffer", issue_id) is None

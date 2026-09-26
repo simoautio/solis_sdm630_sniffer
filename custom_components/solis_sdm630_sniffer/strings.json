@@ -139,5 +139,11 @@
         }
       }
     }
+  },
+  "issues": {
+    "logger_unreachable": {
+      "title": "Solis inverter logger unreachable",
+      "description": "Home Assistant has failed to read the Solis S2-WL-ST logger five times in a row, so inverter sensors are unavailable. Check that the logger is powered, connected to your network and still has the configured IP address. Download the integration diagnostics for the last error type. This issue clears after the next successful read."
+    }
   }
 }
