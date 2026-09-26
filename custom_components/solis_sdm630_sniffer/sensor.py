@@ -129,6 +129,7 @@ async def async_setup_entry(
             SnifferSensor(entry, description)
             for description in (*DESCRIPTIONS, *GRID_DESCRIPTIONS)
         )
+        async_add_entities([TrafficStatusSensor(entry)])
     if runtime.logger:
         # Household values need both sources; never add always-unavailable ones.
         both = bool(runtime.topic)
@@ -142,6 +143,15 @@ async def async_setup_entry(
                 *([BalanceStatusSensor(entry)] if both else []),
             ]
         )
+
+
+def _meter_device(entry: SnifferConfigEntry) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="Solis SDM630 meter",
+        manufacturer="Eastron",
+        model="SDM630MCT (passive MQTT)",
+    )
 
 
 class SnifferSensor(SensorEntity):
@@ -171,12 +181,7 @@ class SnifferSensor(SensorEntity):
             # Relabel instead of swapping values: each entity's history stays
             # one continuous counter, with no false jumps in statistics.
             self._attr_name = REGISTERS[COUNTERPART[description.address]].name
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="Solis SDM630 meter",
-            manufacturer="Eastron",
-            model="SDM630MCT (passive MQTT)",
-        )
+        self._attr_device_info = _meter_device(entry)
 
     @property
     def native_value(self) -> float | None:
@@ -202,6 +207,33 @@ class SnifferSensor(SensorEntity):
         self.async_on_remove(
             self._runtime.async_add_listener(self.async_write_ha_state)
         )
+
+
+class TrafficStatusSensor(SensorEntity):
+    """Whether meter requests and replies are being captured right now."""
+
+    # ponytail: polled every 30 s; push it if that lag ever matters.
+    _attr_should_poll = True
+    _attr_has_entity_name = True
+    _attr_translation_key = "traffic_status"
+    _attr_name = "Meter traffic status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "disconnected",
+        "no_recent_requests_or_paired_responses",
+        "requests_without_paired_responses",
+        "receiving_responses",
+    ]
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry: SnifferConfigEntry) -> None:
+        self._runtime = entry.runtime_data
+        self._attr_unique_id = f"{entry.entry_id}_traffic_status"
+        self._attr_device_info = _meter_device(entry)
+
+    @property
+    def native_value(self) -> str:
+        return self._runtime.traffic_status
 
 
 class InverterSensor(SensorEntity):

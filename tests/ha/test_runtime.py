@@ -328,3 +328,22 @@ async def test_real_timer_updates_grid_power_and_stops_on_disconnect(
         assert tuple(sensor.native_value for sensor in sensors) == (1200, 0)
     finally:
         runtime.async_stop()
+
+
+async def test_traffic_status_sensor(hass, entry, mqtt_transport):
+    from custom_components.solis_sdm630_sniffer.sensor import TrafficStatusSensor
+
+    runtime = SnifferRuntime(hass, "solis/rs485/raw", 60)
+    entry.runtime_data = runtime
+    sensor = TrafficStatusSensor(entry)
+    assert sensor.unique_id == f"{entry.entry_id}_traffic_status"
+    assert sensor.should_poll and sensor.available
+    assert sensor.native_value == "disconnected"
+    await runtime.async_start()
+    assert sensor.native_value == "no_recent_requests_or_paired_responses"
+    runtime.async_message_received(message(transaction()[:9]))
+    assert sensor.native_value == "requests_without_paired_responses"
+    runtime.async_message_received(message(transaction()[9:]))
+    assert sensor.native_value == "receiving_responses"
+    assert sensor.native_value in sensor.options
+    runtime.async_stop()

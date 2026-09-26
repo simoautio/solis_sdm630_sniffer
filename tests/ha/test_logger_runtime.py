@@ -361,3 +361,52 @@ async def test_sustained_failures_raise_and_clear_repair(runtime, hass):
     assert registry.async_get_issue("solis_sdm630_sniffer", issue_id)
     await runtime.async_stop()
     assert registry.async_get_issue("solis_sdm630_sniffer", issue_id) is None
+
+
+async def test_unsupported_model_is_reported_immediately(runtime, hass):
+    from homeassistant.helpers import issue_registry as ir
+
+    client = AsyncMock()
+    client.read.side_effect = lambda address, count: (0x1234,) + (0,) * (count - 1)
+    runtime._running = True
+    runtime._schedule = lambda delay: None
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
+        reader.return_value.__aenter__ = AsyncMock(return_value=client)
+        reader.return_value.__aexit__ = AsyncMock()
+        await runtime.async_poll()
+    assert runtime.last_error == "UnsupportedModel"
+    issue = ir.async_get(hass).async_get_issue(
+        "solis_sdm630_sniffer", "logger_unreachable_test-entry"
+    )
+    assert issue.translation_key == "unsupported_model"
+    await runtime.async_stop()
+
+
+@pytest.mark.parametrize(
+    ("enter", "expected"),
+    [
+        ((0x3306,), None),
+        ((0x1234,), "unsupported_model"),
+        (TimeoutError(), "cannot_connect"),
+    ],
+)
+async def test_probe_logger(enter, expected):
+    from custom_components.solis_sdm630_sniffer.logger_runtime import (
+        async_probe_logger,
+    )
+
+    client = AsyncMock()
+    client.read.return_value = enter
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as reader:
+        reader.return_value.__aexit__ = AsyncMock()
+        reader.return_value.__aenter__ = AsyncMock(
+            side_effect=enter if isinstance(enter, Exception) else None,
+            return_value=client,
+        )
+        assert await async_probe_logger("192.0.2.1", 502, 1) == expected
+    if expected != "cannot_connect":
+        client.read.assert_awaited_once_with(33000, 1)

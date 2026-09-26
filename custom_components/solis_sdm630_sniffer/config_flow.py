@@ -1,4 +1,7 @@
-"""UI configuration; no active probing of the meter or gateway."""
+"""UI configuration; the meter and gateway are never probed.
+
+A new logger endpoint gets one read-only identity read before it is saved.
+"""
 
 from __future__ import annotations
 
@@ -37,6 +40,7 @@ from .const import (
     METER_TITLE,
     MODES,
 )
+from .logger_runtime import async_probe_logger
 from .utility_meters import (
     CYCLES,
     DEFAULT_CYCLES,
@@ -280,6 +284,9 @@ class SnifferConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 if _logger_configured(self.hass, logger):
                     return self.async_abort(reason="already_configured")
+                if error := await async_probe_logger(*_logger_endpoint(logger)):
+                    errors["base"] = error
+            if not errors:
                 if not self._meter:
                     await self.async_set_unique_id(_logger_unique_id(logger))
                     self._abort_if_unique_id_configured()
@@ -407,6 +414,13 @@ class SnifferOptionsFlow(OptionsFlow):
                 and _logger_configured(self.hass, logger, self.config_entry.entry_id)
             ):
                 errors[CONF_LOGGER_HOST] = "logger_already_configured"
+            if (
+                not errors
+                and logger
+                and _logger_endpoint(logger) != _logger_endpoint(current)
+                and (error := await async_probe_logger(*_logger_endpoint(logger)))
+            ):
+                errors["base"] = error
             if not errors:
                 return self._save(
                     logger,

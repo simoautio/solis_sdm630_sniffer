@@ -32,3 +32,14 @@ def mqtt_transport():
         subscribe.return_value = Mock()
         connection.return_value = Mock()
         yield subscribe, connection
+
+
+@pytest.fixture(autouse=True)
+def logger_probe():
+    """Setup's read-only identity check succeeds unless a test says otherwise."""
+    with patch(
+        "custom_components.solis_sdm630_sniffer.config_flow.async_probe_logger",
+        new_callable=AsyncMock,
+        return_value=None,
+    ) as probe:
+        yield probe

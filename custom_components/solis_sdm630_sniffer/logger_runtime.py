@@ -24,12 +24,26 @@ from .const import (
     DOMAIN,
 )
 from .energy import EnergyEstimate, combined_power
-from .inverter_registers import BLOCKS, REGISTERS
+from .inverter_registers import BLOCKS, REGISTERS, SUPPORTED_MODEL
 from .modbus_tcp import ModbusError, ModbusReader, UnsupportedRegisters
 
 _LOGGER = logging.getLogger(__name__)
 
 REPAIR_AFTER_FAILURES = 5
+
+
+class UnsupportedModel(ModbusError):
+    """The logger answered, but for an inverter this profile does not cover."""
+
+
+async def async_probe_logger(host, port, unit) -> str | None:
+    """One read-only identity read; returns a config-flow error key or None."""
+    try:
+        async with ModbusReader(host, port, unit) as client:
+            (model,) = await client.read(33000, 1)
+    except (OSError, TimeoutError, ModbusError):
+        return "cannot_connect"
+    return None if f"0x{model:04X}" == SUPPORTED_MODEL else "unsupported_model"
 
 
 def energy_store(hass, entry_id) -> Store:
@@ -181,8 +195,8 @@ class LoggerRuntime:
             async with ModbusReader(self.host, self.port, self.unit) as client:
                 for start, count in BLOCKS:
                     await self._read_block(client, start, count, values, stamps)
-                    if start == 33000 and values.get("model") != "0x3306":
-                        raise ModbusError("Unsupported inverter model")
+                    if start == 33000 and values.get("model") != SUPPORTED_MODEL:
+                        raise UnsupportedModel
             if not self._running:
                 return
             now = self.clock()
@@ -218,7 +232,8 @@ class LoggerRuntime:
             self.household.update(self.clock(), None)
             self.balance_status = "logger_unavailable"
             _LOGGER.debug("Logger polling failed: %s", self.last_error)
-            if self.failures == REPAIR_AFTER_FAILURES:
+            unsupported = isinstance(err, UnsupportedModel)
+            if unsupported or self.failures == REPAIR_AFTER_FAILURES:
                 # No placeholders: the host is private and stays out of Repairs.
                 ir.async_create_issue(
                     self.hass,
@@ -226,7 +241,9 @@ class LoggerRuntime:
                     self.issue_id,
                     is_fixable=False,
                     severity=ir.IssueSeverity.ERROR,
-                    translation_key="logger_unreachable",
+                    translation_key=(
+                        "unsupported_model" if unsupported else "logger_unreachable"
+                    ),
                 )
         finally:
             if self._running:

@@ -35,7 +35,9 @@
       "invalid_update_interval": "Enter an update interval between 1 and 86400 seconds.",
       "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
       "logger_required": "Enter the logger's IP address or hostname.",
-      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry."
+      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry.",
+      "cannot_connect": "Could not read the logger. Check that it is powered, on your network, and that the IP address, port 502 and unit ID are correct.",
+      "unsupported_model": "The logger answered, but the inverter is not a supported model (S6-EH3P 5–10K-H, model code 0x3306)."
     },
     "abort": {
       "mqtt_required": "Configure and enable the built-in MQTT integration first.",
@@ -90,7 +92,9 @@
       "invalid_logger": "Enter a hostname or IP address without scheme or port, a port 1–65535, a unit ID 1–247, and a polling interval of 10–3600 seconds.",
       "invalid_helper_selection": "Select only the listed cycles and sources.",
       "logger_required": "This entry only monitors the inverter, so a logger address is required. Remove the integration to stop monitoring.",
-      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry."
+      "logger_already_configured": "This logger host, port and unit ID are already used by another integration entry.",
+      "cannot_connect": "Could not read the logger. Check that it is powered, on your network, and that the IP address, port 502 and unit ID are correct.",
+      "unsupported_model": "The logger answered, but the inverter is not a supported model (S6-EH3P 5–10K-H, model code 0x3306)."
     }
   },
   "selector": {
@@ -137,6 +141,14 @@
           "negative_household_balance": "Negative household balance",
           "logger_unavailable": "Logger unavailable"
         }
+      },
+      "traffic_status": {
+        "state": {
+          "disconnected": "Disconnected",
+          "no_recent_requests_or_paired_responses": "No recent traffic",
+          "requests_without_paired_responses": "Requests without replies",
+          "receiving_responses": "Receiving replies"
+        }
       }
     }
   },
@@ -144,6 +156,10 @@
     "logger_unreachable": {
       "title": "Solis inverter logger unreachable",
       "description": "Home Assistant has failed to read the Solis S2-WL-ST logger five times in a row, so inverter sensors are unavailable. Check that the logger is powered, connected to your network and still has the configured IP address. Download the integration diagnostics for the last error type. This issue clears after the next successful read."
+    },
+    "unsupported_model": {
+      "title": "Unsupported Solis inverter model",
+      "description": "The logger answered, but the inverter's model code is not 0x3306 (S6-EH3P 5–10K-H), so inverter sensors stay unavailable. Download the integration diagnostics to see the reported model code."
     }
   }
 }

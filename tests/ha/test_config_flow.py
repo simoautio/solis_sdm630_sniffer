@@ -463,3 +463,41 @@ async def test_logger_address_change_releases_old_endpoint(hass):
             form["flow_id"], {"logger_host": "NEW.TEST."}
         )
         assert duplicate["reason"] == "already_configured"
+
+
+@pytest.mark.parametrize("error", ["cannot_connect", "unsupported_model"])
+async def test_setup_probes_logger_and_retries(hass, logger_probe, error):
+    logger_probe.return_value = error
+    with patch(SKIP_SETUP, return_value=True):
+        form = await start_setup(hass, "logger")
+        result = await hass.config_entries.flow.async_configure(
+            form["flow_id"], {"logger_host": "192.0.2.1"}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["errors"] == {"base": error}
+        logger_probe.assert_awaited_once_with("192.0.2.1", 502, 1)
+        logger_probe.return_value = None
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"logger_host": "192.0.2.1"}
+        )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_options_probe_only_changed_endpoint(hass, logger_probe):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={}, options={"logger_host": "192.0.2.1"}
+    )
+    entry.add_to_hass(hass)
+    logger_probe.return_value = "cannot_connect"
+    form = await open_options(hass, entry, "logger")
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], {"logger_host": "192.0.2.1", "logger_interval": 60}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    logger_probe.assert_not_awaited()
+    form = await open_options(hass, entry, "logger")
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"], {"logger_host": "192.0.2.2"}
+    )
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.options["logger_host"] == "192.0.2.1"

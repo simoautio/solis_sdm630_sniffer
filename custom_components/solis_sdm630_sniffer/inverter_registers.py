@@ -7,6 +7,8 @@ not evidence of additional supported hardware. Battery/PV3/PV4 are omitted.
 
 from dataclasses import dataclass
 
+SUPPORTED_MODEL = "0x3306"
+
 STATUS = {
     0: "Waiting",
     1: "Open loop",
