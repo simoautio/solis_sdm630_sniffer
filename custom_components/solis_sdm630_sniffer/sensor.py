@@ -38,7 +38,7 @@ class SnifferSensorDescription(SensorEntityDescription):
 DESCRIPTIONS = tuple(
     SnifferSensorDescription(
         key=register.key,
-        name=register.name,
+        translation_key=register.key,
         address=address,
         native_unit_of_measurement=register.unit,
         device_class=SensorDeviceClass(register.device_class),
@@ -50,7 +50,7 @@ DESCRIPTIONS = tuple(
 GRID_DESCRIPTIONS = tuple(
     SnifferSensorDescription(
         key=f"grid_{direction}_power",
-        name=f"Grid {direction} power",
+        translation_key=f"grid_{direction}_power",
         address=52,
         grid_direction=direction,
         native_unit_of_measurement="W",
@@ -61,10 +61,11 @@ GRID_DESCRIPTIONS = tuple(
 )
 
 
-def _inverter_description(key, name, unit, device_class, state_class, diagnostic):
+def _inverter_description(key, unit, device_class, state_class, diagnostic):
+    # Names live in strings.json; inverter keys are prefixed to avoid meter clashes.
     return SensorEntityDescription(
         key=key,
-        name=name,
+        translation_key=f"inverter_{key}",
         native_unit_of_measurement=unit,
         device_class=SensorDeviceClass(device_class) if device_class else None,
         state_class=SensorStateClass(state_class) if state_class else None,
@@ -75,31 +76,19 @@ def _inverter_description(key, name, unit, device_class, state_class, diagnostic
 INVERTER_DESCRIPTIONS = (
     *(
         _inverter_description(
-            r.key, r.name, r.unit, r.device_class, r.state_class, r.diagnostic
+            r.key, r.unit, r.device_class, r.state_class, r.diagnostic
         )
         for r in INVERTER_REGISTERS
     ),
     *(
-        _inverter_description(key, name, unit, device_class, state_class, False)
-        for key, name, unit, device_class, state_class in (
-            ("pv1_power", "PV1 power", "W", "power", "measurement"),
-            ("pv2_power", "PV2 power", "W", "power", "measurement"),
-            ("solar_ac_power", "Solar power", "W", "power", "measurement"),
-            ("household_power", "Household power", "W", "power", "measurement"),
-            (
-                "estimated_solar_energy",
-                "Estimated solar energy",
-                "kWh",
-                "energy",
-                "total_increasing",
-            ),
-            (
-                "estimated_household_energy",
-                "Estimated household energy",
-                "kWh",
-                "energy",
-                "total_increasing",
-            ),
+        _inverter_description(key, unit, device_class, state_class, False)
+        for key, unit, device_class, state_class in (
+            ("pv1_power", "W", "power", "measurement"),
+            ("pv2_power", "W", "power", "measurement"),
+            ("solar_ac_power", "W", "power", "measurement"),
+            ("household_power", "W", "power", "measurement"),
+            ("estimated_solar_energy", "kWh", "energy", "total_increasing"),
+            ("estimated_household_energy", "kWh", "energy", "total_increasing"),
         )
     ),
 )
@@ -180,7 +169,7 @@ class SnifferSensor(SensorEntity):
         ):
             # Relabel instead of swapping values: each entity's history stays
             # one continuous counter, with no false jumps in statistics.
-            self._attr_name = REGISTERS[COUNTERPART[description.address]].name
+            self._attr_translation_key = REGISTERS[COUNTERPART[description.address]].key
         self._attr_device_info = _meter_device(entry)
 
     @property
@@ -216,7 +205,6 @@ class TrafficStatusSensor(SensorEntity):
     _attr_should_poll = True
     _attr_has_entity_name = True
     _attr_translation_key = "traffic_status"
-    _attr_name = "Meter traffic status"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [
         "disconnected",
@@ -277,7 +265,6 @@ class BalanceStatusSensor(InverterSensor):
             SensorEntityDescription(
                 key="balance_status",
                 translation_key="balance_status",
-                name="Household balance status",
                 device_class=SensorDeviceClass.ENUM,
                 options=BALANCE_STATUSES,
                 entity_category=EntityCategory.DIAGNOSTIC,

@@ -288,9 +288,10 @@ async def test_reversed_meter_relabels_counters_and_helper_sources(hass, energy_
     phase = SnifferSensor(energy_entry, by_address[352])
     # Same unique ID and value source; only the label follows physical direction.
     assert imported.unique_id == f"{energy_entry.entry_id}_72"
-    assert imported.name == "Export energy"
-    assert phase.name == "L1 import energy"
-    assert SnifferSensor(energy_entry, by_address[52]).name == "Total active power"
+    assert imported.translation_key == "export_energy"
+    assert phase.translation_key == "l1_import_energy"
+    total = SnifferSensor(energy_entry, by_address[52])
+    assert total.translation_key == "total_active_power"
     energy_entry.runtime_data.values[72] = 327
     assert imported.native_value == 327
 

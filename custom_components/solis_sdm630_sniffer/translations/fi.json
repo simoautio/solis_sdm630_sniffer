@@ -1,0 +1,428 @@
+{
+  "title": "Solis SDM630 Sniffer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solis SDM630 Sniffer",
+        "description": "Valitse, mitä seurataan. Mittaria luetaan passiivisesti MQTT:hen julkaistusta RS485-liikenteestä (vaatii MQTT-integraation). Invertteriä luetaan Solis S2-WL-ST -loggerin kautta vain lukevalla Modbus TCP -yhteydellä; mitään ei kirjoiteta, eikä SolisCloud-raportointia muuteta.",
+        "data": {
+          "mode": "Mitä seurataan"
+        }
+      },
+      "meter": {
+        "title": "Mittari (MQTT)",
+        "description": "Kuuntele raakaa binääriliikennettä, joka sisältää sekä Modbus-kyselyt että -vastaukset. Kyselyitä ei lähetetä. Uusimmat anturilukemat julkaistaan päivitysvälein (oletus 30 sekuntia). Tämä ohjaa myös kojelautojen, automaatioiden ja historian päivityksiä; saatavuuden muutokset näkyvät heti.",
+        "data": {
+          "topic": "MQTT-aihe",
+          "timeout": "Saatavuuden aikakatkaisu (sekuntia)",
+          "update_interval": "Päivitysväli (sekuntia)"
+        }
+      },
+      "logger": {
+        "title": "Invertterin loggeri (Modbus TCP)",
+        "description": "Anna Solis S2-WL-ST -loggerin IP-osoite tai isäntänimi. Sitä vain luetaan (Modbus-funktio 04). Voit muuttaa asetuksia myöhemmin kohdasta Määritä.",
+        "data": {
+          "logger_host": "Loggerin IP-osoite tai isäntänimi",
+          "logger_port": "Modbus TCP -portti",
+          "logger_unit": "Invertterin Modbus-yksikkötunnus",
+          "logger_interval": "Kyselyväli (sekuntia)"
+        }
+      }
+    },
+    "error": {
+      "invalid_topic": "Anna yksi tarkka MQTT-aihe ilman jokerimerkkejä.",
+      "invalid_timeout": "Anna aikakatkaisu väliltä 1–86400 sekuntia.",
+      "invalid_update_interval": "Anna päivitysväli väliltä 1–86400 sekuntia.",
+      "invalid_logger": "Anna isäntänimi tai IP-osoite ilman skeemaa tai porttia, portti 1–65535, yksikkötunnus 1–247 ja kyselyväli 10–3600 sekuntia.",
+      "logger_required": "Anna loggerin IP-osoite tai isäntänimi.",
+      "logger_already_configured": "Tämä loggerin osoite, portti ja yksikkötunnus ovat jo toisen integraatiomerkinnän käytössä.",
+      "cannot_connect": "Loggeria ei voitu lukea. Tarkista, että se on päällä ja verkossa ja että IP-osoite, portti 502 ja yksikkötunnus ovat oikein.",
+      "unsupported_model": "Loggeri vastasi, mutta invertteri ei ole tuettu malli (S6-EH3P 5–10K-H, mallikoodi 0x3306)."
+    },
+    "abort": {
+      "mqtt_required": "Määritä ja ota käyttöön sisäänrakennettu MQTT-integraatio ensin.",
+      "already_configured": "Tämä MQTT-aihe tai loggeri on jo määritetty."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Määritä",
+        "menu_options": {
+          "meter": "Mittari",
+          "logger": "Invertterin loggeri",
+          "utility_meters": "Luo kulutusmittarit"
+        }
+      },
+      "meter": {
+        "title": "Mittari",
+        "description": "Valitse, kumpi Kokonaispätötehon etumerkki tarkoittaa verkosta ottoa. Tämä vaikuttaa vain verkosta otetun ja verkkoon syötetyn tehon antureihin; mittarin energialaskurit säilyttävät alkuperäisen suuntansa. Uusimmat anturilukemat julkaistaan päivitysvälein (oletus 30 sekuntia). Tämä ohjaa myös kojelautojen, automaatioiden ja historian päivityksiä; saatavuuden muutokset näkyvät heti. Jos mittarin Verkkoon syötetty energia kasvaa, kun ostat sähköä (esimerkiksi syöttö on suurempi kuin koko aurinkotuotantosi), ota käyttöön Mittari asennettu väärinpäin: Verkosta otetun ja Verkkoon syötetyn energian entiteetit vaihtavat nimet ja apulaitteiden lähteet, ja kumpikin säilyttää historiansa. Se ei muuta tehoantureita; aseta niiden suunta yllä olevalla tehon etumerkillä.",
+        "data": {
+          "timeout": "Saatavuuden aikakatkaisu (sekuntia)",
+          "update_interval": "Päivitysväli (sekuntia)",
+          "grid_import_sign": "Verkosta oton tehon etumerkki",
+          "meter_reversed": "Mittari asennettu väärinpäin (vaihda otto- ja syöttöenergia)"
+        }
+      },
+      "logger": {
+        "title": "Invertterin loggeri",
+        "description": "Anna Solis S2-WL-ST -loggerin IP-osoite tai isäntänimi lisätäksesi paikalliset invertterilukemat. Loggeria vain luetaan (Modbus-funktio 04); invertteriin tai loggeriin ei kirjoiteta mitään, eikä SolisCloud-raportointia muuteta. Jätä osoite tyhjäksi poistaaksesi kyselyn käytöstä.",
+        "data": {
+          "logger_host": "Loggerin IP-osoite tai isäntänimi",
+          "logger_port": "Modbus TCP -portti",
+          "logger_unit": "Invertterin Modbus-yksikkötunnus",
+          "logger_interval": "Kyselyväli (sekuntia)"
+        }
+      },
+      "utility_meters": {
+        "title": "Luo kulutusmittarit",
+        "description": "Luo Home Assistantin vakiomuotoiset kulutusmittari-apulaitteet (Utility Meter) valituille jaksoille ja lähteille. Olemassa olevat vastaavat apulaitteet säilytetään, eikä mitään luoda uudelleen käynnistyksen yhteydessä. Ensimmäinen jakso alkaa, kun apulaite luodaan. Arvioidut aurinko- ja kotitalousenergian lähteet vaativat määritetyn loggerin.",
+        "data": {
+          "utility_meter_cycles": "Jaksot",
+          "utility_meter_sources": "Lähteet"
+        }
+      }
+    },
+    "error": {
+      "invalid_timeout": "Anna aikakatkaisu väliltä 1–86400 sekuntia.",
+      "invalid_direction": "Valitse positiivinen tai negatiivinen teho verkosta otolle.",
+      "sources_not_ready": "Ota Verkosta otettu energia- ja Verkkoon syötetty energia -entiteetit käyttöön ja lataa tämä integraatio ennen kulutusmittarien luomista.",
+      "utility_meters_failed": "Joitakin kulutusmittareita ei voitu luoda. Olemassa olevat apulaitteet säilytettiin; tarkista loki ja yritä uudelleen puuttuvien luomiseksi.",
+      "invalid_update_interval": "Anna päivitysväli väliltä 1–86400 sekuntia.",
+      "invalid_logger": "Anna isäntänimi tai IP-osoite ilman skeemaa tai porttia, portti 1–65535, yksikkötunnus 1–247 ja kyselyväli 10–3600 sekuntia.",
+      "invalid_helper_selection": "Valitse vain luetellut jaksot ja lähteet.",
+      "logger_required": "Tämä merkintä seuraa vain invertteriä, joten loggerin osoite on pakollinen. Poista integraatio lopettaaksesi seurannan.",
+      "logger_already_configured": "Tämä loggerin osoite, portti ja yksikkötunnus ovat jo toisen integraatiomerkinnän käytössä.",
+      "cannot_connect": "Loggeria ei voitu lukea. Tarkista, että se on päällä ja verkossa ja että IP-osoite, portti 502 ja yksikkötunnus ovat oikein.",
+      "unsupported_model": "Loggeri vastasi, mutta invertteri ei ole tuettu malli (S6-EH3P 5–10K-H, mallikoodi 0x3306)."
+    }
+  },
+  "selector": {
+    "grid_import_sign": {
+      "options": {
+        "positive": "Positiivinen teho tarkoittaa verkosta ottoa",
+        "negative": "Negatiivinen teho tarkoittaa verkosta ottoa"
+      }
+    },
+    "utility_meter_cycles": {
+      "options": {
+        "quarter-hourly": "Vartin välein",
+        "hourly": "Tunneittain",
+        "daily": "Päivittäin",
+        "monthly": "Kuukausittain",
+        "yearly": "Vuosittain"
+      }
+    },
+    "utility_meter_sources": {
+      "options": {
+        "import": "Mittarin verkosta otettu energia",
+        "export": "Mittarin verkkoon syötetty energia",
+        "solar": "Arvioitu aurinkoenergia",
+        "household": "Arvioitu kotitalouden energia"
+      }
+    },
+    "mode": {
+      "options": {
+        "both": "Mittari ja invertteri",
+        "meter": "Vain mittari (MQTT-sniffer)",
+        "logger": "Vain invertteri (loggeri, Modbus TCP)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "l1_voltage": {
+        "name": "L1 jännite"
+      },
+      "l2_voltage": {
+        "name": "L2 jännite"
+      },
+      "l3_voltage": {
+        "name": "L3 jännite"
+      },
+      "l1_current": {
+        "name": "L1 virta"
+      },
+      "l2_current": {
+        "name": "L2 virta"
+      },
+      "l3_current": {
+        "name": "L3 virta"
+      },
+      "l1_active_power": {
+        "name": "L1 pätöteho"
+      },
+      "l2_active_power": {
+        "name": "L2 pätöteho"
+      },
+      "l3_active_power": {
+        "name": "L3 pätöteho"
+      },
+      "l1_apparent_power": {
+        "name": "L1 näennäisteho"
+      },
+      "l2_apparent_power": {
+        "name": "L2 näennäisteho"
+      },
+      "l3_apparent_power": {
+        "name": "L3 näennäisteho"
+      },
+      "l1_reactive_power": {
+        "name": "L1 loisteho"
+      },
+      "l2_reactive_power": {
+        "name": "L2 loisteho"
+      },
+      "l3_reactive_power": {
+        "name": "L3 loisteho"
+      },
+      "l1_power_factor": {
+        "name": "L1 tehokerroin"
+      },
+      "l2_power_factor": {
+        "name": "L2 tehokerroin"
+      },
+      "l3_power_factor": {
+        "name": "L3 tehokerroin"
+      },
+      "average_voltage": {
+        "name": "Keskimääräinen jännite"
+      },
+      "average_current": {
+        "name": "Keskimääräinen virta"
+      },
+      "sum_current": {
+        "name": "Virtojen summa"
+      },
+      "total_active_power": {
+        "name": "Kokonaispätöteho"
+      },
+      "total_apparent_power": {
+        "name": "Kokonaisnäennäisteho"
+      },
+      "total_reactive_power": {
+        "name": "Kokonaisloisteho"
+      },
+      "total_power_factor": {
+        "name": "Kokonaistehokerroin"
+      },
+      "frequency": {
+        "name": "Taajuus"
+      },
+      "l1_l2_voltage": {
+        "name": "L1-L2 jännite"
+      },
+      "l2_l3_voltage": {
+        "name": "L2-L3 jännite"
+      },
+      "l3_l1_voltage": {
+        "name": "L3-L1 jännite"
+      },
+      "average_line_voltage": {
+        "name": "Keskimääräinen pääjännite"
+      },
+      "import_energy": {
+        "name": "Verkosta otettu energia"
+      },
+      "export_energy": {
+        "name": "Verkkoon syötetty energia"
+      },
+      "total_energy": {
+        "name": "Kokonaisenergia"
+      },
+      "l1_import_energy": {
+        "name": "L1 verkosta otettu energia"
+      },
+      "l2_import_energy": {
+        "name": "L2 verkosta otettu energia"
+      },
+      "l3_import_energy": {
+        "name": "L3 verkosta otettu energia"
+      },
+      "l1_export_energy": {
+        "name": "L1 verkkoon syötetty energia"
+      },
+      "l2_export_energy": {
+        "name": "L2 verkkoon syötetty energia"
+      },
+      "l3_export_energy": {
+        "name": "L3 verkkoon syötetty energia"
+      },
+      "grid_import_power": {
+        "name": "Verkosta otettu teho"
+      },
+      "grid_export_power": {
+        "name": "Verkkoon syötetty teho"
+      },
+      "inverter_model": {
+        "name": "Mallikoodi"
+      },
+      "inverter_dsp_version": {
+        "name": "DSP-versiokoodi"
+      },
+      "inverter_hmi_version": {
+        "name": "HMI-versiokoodi"
+      },
+      "inverter_protocol_version": {
+        "name": "Protokollaversio"
+      },
+      "inverter_production_total": {
+        "name": "Aurinkotuotanto yhteensä"
+      },
+      "inverter_production_month": {
+        "name": "Aurinkotuotanto tässä kuussa"
+      },
+      "inverter_production_last_month": {
+        "name": "Aurinkotuotanto viime kuussa"
+      },
+      "inverter_production_today": {
+        "name": "Aurinkotuotanto tänään"
+      },
+      "inverter_production_yesterday": {
+        "name": "Aurinkotuotanto eilen"
+      },
+      "inverter_production_year": {
+        "name": "Aurinkotuotanto tänä vuonna"
+      },
+      "inverter_production_last_year": {
+        "name": "Aurinkotuotanto viime vuonna"
+      },
+      "inverter_pv1_voltage": {
+        "name": "PV1 jännite"
+      },
+      "inverter_pv1_current": {
+        "name": "PV1 virta"
+      },
+      "inverter_pv2_voltage": {
+        "name": "PV2 jännite"
+      },
+      "inverter_pv2_current": {
+        "name": "PV2 virta"
+      },
+      "inverter_pv_dc_power": {
+        "name": "PV DC-teho"
+      },
+      "inverter_ac_voltage_1": {
+        "name": "L1 jännite"
+      },
+      "inverter_ac_voltage_2": {
+        "name": "L2 jännite"
+      },
+      "inverter_ac_voltage_3": {
+        "name": "L3 jännite"
+      },
+      "inverter_ac_current_1": {
+        "name": "L1 virta"
+      },
+      "inverter_ac_current_2": {
+        "name": "L2 virta"
+      },
+      "inverter_ac_current_3": {
+        "name": "L3 virta"
+      },
+      "inverter_inverting_power": {
+        "name": "Pätöteho"
+      },
+      "inverter_reactive_power": {
+        "name": "Loisteho"
+      },
+      "inverter_apparent_power": {
+        "name": "Näennäisteho"
+      },
+      "inverter_temperature": {
+        "name": "Lämpötila"
+      },
+      "inverter_frequency": {
+        "name": "AC-taajuus"
+      },
+      "inverter_status": {
+        "name": "Tila"
+      },
+      "inverter_grid_faults": {
+        "name": "Verkon vikabitit"
+      },
+      "inverter_backup_faults": {
+        "name": "Varavoiman vikabitit"
+      },
+      "inverter_inverter_faults_1": {
+        "name": "Vikabitit 1"
+      },
+      "inverter_inverter_faults_2": {
+        "name": "Vikabitit 2"
+      },
+      "inverter_operating_bits": {
+        "name": "Käyttötilan bitit"
+      },
+      "inverter_reported_household_power": {
+        "name": "Raportoitu kotitalouden teho"
+      },
+      "inverter_backup_power": {
+        "name": "Varavoimateho"
+      },
+      "inverter_ac_grid_power": {
+        "name": "Verkkoportin teho"
+      },
+      "inverter_reported_import_total": {
+        "name": "Raportoitu verkosta otettu energia"
+      },
+      "inverter_reported_export_total": {
+        "name": "Raportoitu verkkoon syötetty energia"
+      },
+      "inverter_reported_household_total": {
+        "name": "Raportoitu kotitalouden energia"
+      },
+      "inverter_reported_grid_power": {
+        "name": "Raportoitu verkkoteho"
+      },
+      "inverter_pv1_power": {
+        "name": "PV1 teho"
+      },
+      "inverter_pv2_power": {
+        "name": "PV2 teho"
+      },
+      "inverter_solar_ac_power": {
+        "name": "Aurinkoteho"
+      },
+      "inverter_household_power": {
+        "name": "Kotitalouden teho"
+      },
+      "inverter_estimated_solar_energy": {
+        "name": "Arvioitu aurinkoenergia"
+      },
+      "inverter_estimated_household_energy": {
+        "name": "Arvioitu kotitalouden energia"
+      },
+      "balance_status": {
+        "name": "Kotitalouden tasetila",
+        "state": {
+          "waiting_for_sources": "Odotetaan lähteitä",
+          "ok": "OK",
+          "meter_unavailable": "Mittari ei käytettävissä",
+          "unaligned_samples": "Näytteet eivät ole samanaikaisia",
+          "inverter_output_unavailable": "Invertterin teho ei käytettävissä",
+          "negative_household_balance": "Negatiivinen kotitalouden tase",
+          "logger_unavailable": "Loggeri ei käytettävissä"
+        }
+      },
+      "traffic_status": {
+        "name": "Mittarin liikennetila",
+        "state": {
+          "disconnected": "Ei yhteyttä",
+          "no_recent_requests_or_paired_responses": "Ei viimeaikaista liikennettä",
+          "requests_without_paired_responses": "Kyselyitä ilman vastauksia",
+          "receiving_responses": "Vastauksia vastaanotetaan"
+        }
+      }
+    }
+  },
+  "issues": {
+    "logger_unreachable": {
+      "title": "Solis-invertterin loggeriin ei saada yhteyttä",
+      "description": "Home Assistant ei ole pystynyt lukemaan Solis S2-WL-ST -loggeria viittä kertaa peräkkäin, joten invertterin anturit eivät ole käytettävissä. Tarkista, että loggeri on päällä, yhdistetty verkkoosi ja että sillä on yhä määritetty IP-osoite. Viimeisimmän virheen tyypin näet integraation diagnostiikkatiedoista. Ilmoitus poistuu seuraavan onnistuneen lukukerran jälkeen."
+    },
+    "unsupported_model": {
+      "title": "Solis-invertterin malli ei ole tuettu",
+      "description": "Loggeri vastasi, mutta invertterin mallikoodi ei ole 0x3306 (S6-EH3P 5–10K-H), joten invertterin anturit pysyvät poissa käytöstä. Raportoidun mallikoodin näet integraation diagnostiikkatiedoista."
+    }
+  }
+}

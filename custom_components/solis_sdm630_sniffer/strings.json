@@ -131,7 +131,269 @@
   },
   "entity": {
     "sensor": {
+      "l1_voltage": {
+        "name": "L1 voltage"
+      },
+      "l2_voltage": {
+        "name": "L2 voltage"
+      },
+      "l3_voltage": {
+        "name": "L3 voltage"
+      },
+      "l1_current": {
+        "name": "L1 current"
+      },
+      "l2_current": {
+        "name": "L2 current"
+      },
+      "l3_current": {
+        "name": "L3 current"
+      },
+      "l1_active_power": {
+        "name": "L1 active power"
+      },
+      "l2_active_power": {
+        "name": "L2 active power"
+      },
+      "l3_active_power": {
+        "name": "L3 active power"
+      },
+      "l1_apparent_power": {
+        "name": "L1 apparent power"
+      },
+      "l2_apparent_power": {
+        "name": "L2 apparent power"
+      },
+      "l3_apparent_power": {
+        "name": "L3 apparent power"
+      },
+      "l1_reactive_power": {
+        "name": "L1 reactive power"
+      },
+      "l2_reactive_power": {
+        "name": "L2 reactive power"
+      },
+      "l3_reactive_power": {
+        "name": "L3 reactive power"
+      },
+      "l1_power_factor": {
+        "name": "L1 power factor"
+      },
+      "l2_power_factor": {
+        "name": "L2 power factor"
+      },
+      "l3_power_factor": {
+        "name": "L3 power factor"
+      },
+      "average_voltage": {
+        "name": "Average voltage"
+      },
+      "average_current": {
+        "name": "Average current"
+      },
+      "sum_current": {
+        "name": "Sum current"
+      },
+      "total_active_power": {
+        "name": "Total active power"
+      },
+      "total_apparent_power": {
+        "name": "Total apparent power"
+      },
+      "total_reactive_power": {
+        "name": "Total reactive power"
+      },
+      "total_power_factor": {
+        "name": "Total power factor"
+      },
+      "frequency": {
+        "name": "Frequency"
+      },
+      "l1_l2_voltage": {
+        "name": "L1-L2 voltage"
+      },
+      "l2_l3_voltage": {
+        "name": "L2-L3 voltage"
+      },
+      "l3_l1_voltage": {
+        "name": "L3-L1 voltage"
+      },
+      "average_line_voltage": {
+        "name": "Average line voltage"
+      },
+      "import_energy": {
+        "name": "Import energy"
+      },
+      "export_energy": {
+        "name": "Export energy"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      },
+      "l1_import_energy": {
+        "name": "L1 import energy"
+      },
+      "l2_import_energy": {
+        "name": "L2 import energy"
+      },
+      "l3_import_energy": {
+        "name": "L3 import energy"
+      },
+      "l1_export_energy": {
+        "name": "L1 export energy"
+      },
+      "l2_export_energy": {
+        "name": "L2 export energy"
+      },
+      "l3_export_energy": {
+        "name": "L3 export energy"
+      },
+      "grid_import_power": {
+        "name": "Grid import power"
+      },
+      "grid_export_power": {
+        "name": "Grid export power"
+      },
+      "inverter_model": {
+        "name": "Model code"
+      },
+      "inverter_dsp_version": {
+        "name": "DSP version code"
+      },
+      "inverter_hmi_version": {
+        "name": "HMI version code"
+      },
+      "inverter_protocol_version": {
+        "name": "Protocol version"
+      },
+      "inverter_production_total": {
+        "name": "PV production total"
+      },
+      "inverter_production_month": {
+        "name": "PV production this month"
+      },
+      "inverter_production_last_month": {
+        "name": "PV production last month"
+      },
+      "inverter_production_today": {
+        "name": "PV production today"
+      },
+      "inverter_production_yesterday": {
+        "name": "PV production yesterday"
+      },
+      "inverter_production_year": {
+        "name": "PV production this year"
+      },
+      "inverter_production_last_year": {
+        "name": "PV production last year"
+      },
+      "inverter_pv1_voltage": {
+        "name": "PV1 voltage"
+      },
+      "inverter_pv1_current": {
+        "name": "PV1 current"
+      },
+      "inverter_pv2_voltage": {
+        "name": "PV2 voltage"
+      },
+      "inverter_pv2_current": {
+        "name": "PV2 current"
+      },
+      "inverter_pv_dc_power": {
+        "name": "PV DC power"
+      },
+      "inverter_ac_voltage_1": {
+        "name": "L1 voltage"
+      },
+      "inverter_ac_voltage_2": {
+        "name": "L2 voltage"
+      },
+      "inverter_ac_voltage_3": {
+        "name": "L3 voltage"
+      },
+      "inverter_ac_current_1": {
+        "name": "L1 current"
+      },
+      "inverter_ac_current_2": {
+        "name": "L2 current"
+      },
+      "inverter_ac_current_3": {
+        "name": "L3 current"
+      },
+      "inverter_inverting_power": {
+        "name": "Active power"
+      },
+      "inverter_reactive_power": {
+        "name": "Reactive power"
+      },
+      "inverter_apparent_power": {
+        "name": "Apparent power"
+      },
+      "inverter_temperature": {
+        "name": "Temperature"
+      },
+      "inverter_frequency": {
+        "name": "AC frequency"
+      },
+      "inverter_status": {
+        "name": "Status"
+      },
+      "inverter_grid_faults": {
+        "name": "Grid fault bits"
+      },
+      "inverter_backup_faults": {
+        "name": "Backup fault bits"
+      },
+      "inverter_inverter_faults_1": {
+        "name": "Fault bits 1"
+      },
+      "inverter_inverter_faults_2": {
+        "name": "Fault bits 2"
+      },
+      "inverter_operating_bits": {
+        "name": "Operating status bits"
+      },
+      "inverter_reported_household_power": {
+        "name": "Reported household power"
+      },
+      "inverter_backup_power": {
+        "name": "Backup power"
+      },
+      "inverter_ac_grid_power": {
+        "name": "Grid port power"
+      },
+      "inverter_reported_import_total": {
+        "name": "Reported grid import energy"
+      },
+      "inverter_reported_export_total": {
+        "name": "Reported grid export energy"
+      },
+      "inverter_reported_household_total": {
+        "name": "Reported household energy"
+      },
+      "inverter_reported_grid_power": {
+        "name": "Reported grid power"
+      },
+      "inverter_pv1_power": {
+        "name": "PV1 power"
+      },
+      "inverter_pv2_power": {
+        "name": "PV2 power"
+      },
+      "inverter_solar_ac_power": {
+        "name": "Solar power"
+      },
+      "inverter_household_power": {
+        "name": "Household power"
+      },
+      "inverter_estimated_solar_energy": {
+        "name": "Estimated solar energy"
+      },
+      "inverter_estimated_household_energy": {
+        "name": "Estimated household energy"
+      },
       "balance_status": {
+        "name": "Household balance status",
         "state": {
           "waiting_for_sources": "Waiting for sources",
           "ok": "OK",
@@ -143,6 +405,7 @@
         }
       },
       "traffic_status": {
+        "name": "Meter traffic status",
         "state": {
           "disconnected": "Disconnected",
           "no_recent_requests_or_paired_responses": "No recent traffic",

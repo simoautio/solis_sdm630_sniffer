@@ -141,6 +141,11 @@ async def test_setup_independence_restore_and_redaction(
         assert logger.failures >= 1
         assert logger.solar.total == 5 and logger.household.total == 7
         status = registry.async_get_entity_id("sensor", DOMAIN, "abc_inverter_status")
+        # Names come from translations; a missing key would leave it blank.
+        assert all(
+            item.original_name
+            for item in er.async_entries_for_config_entry(registry, "abc")
+        )
         assert hass.states.get(status).state == "unavailable"
 
         # A logger outage never affects meter availability.
