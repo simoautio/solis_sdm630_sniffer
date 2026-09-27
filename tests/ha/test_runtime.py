@@ -1,6 +1,7 @@
 """Exercise binary subscription, freshness, entities and lifecycle using HA."""
 
 import struct
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -12,6 +13,9 @@ from custom_components.solis_sdm630_sniffer.const import DOMAIN
 from custom_components.solis_sdm630_sniffer.protocol import crc16
 from custom_components.solis_sdm630_sniffer.runtime import SnifferRuntime
 from custom_components.solis_sdm630_sniffer.sensor import DESCRIPTIONS, SnifferSensor
+
+# Hand-wired entities have no platform, so HA cannot resolve translation keys.
+UNTRANSLATED = replace(DESCRIPTIONS[0], translation_key=None)
 
 
 def frame(body):
@@ -89,7 +93,7 @@ async def test_retained_invalid_and_timeout(hass, mqtt_transport):
 async def test_disconnect_and_sensor_listener(hass, entry, mqtt_transport):
     runtime = SnifferRuntime(hass, "test", 60)
     entry.runtime_data = runtime
-    sensor = SnifferSensor(entry, DESCRIPTIONS[0])
+    sensor = SnifferSensor(entry, UNTRANSLATED)
     sensor.hass = hass
     sensor.entity_id = "sensor.test_voltage"
     await runtime.async_start()
@@ -200,7 +204,7 @@ async def test_interval_batches_latest_without_availability_leaks(
     now = [0.0]
     runtime = SnifferRuntime(hass, "test", 60, clock=lambda: now[0])
     entry.runtime_data = runtime
-    sensor = SnifferSensor(entry, DESCRIPTIONS[0])
+    sensor = SnifferSensor(entry, UNTRANSLATED)
     sensor.hass = hass
     sensor.entity_id = "sensor.interval_voltage"
     await runtime.async_start()
