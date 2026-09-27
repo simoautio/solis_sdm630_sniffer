@@ -269,6 +269,8 @@ They cover CRC vectors/failures, fragmented and concatenated payloads, pairing, 
 
 **Home Assistant compatibility tests run in GitHub Actions**, on Linux, against 2026.1.0 and 2026.9.3. They cover config/options flows, MQTT subscription arguments, sensors, timeouts, disconnects, setup/unload cleanup, and diagnostics. The local test collector omits `tests/ha` when Home Assistant is absent. No tests transmit Modbus requests.
 
+**Translations:** the UI is available in English and Finnish. `strings.json` is the source; `translations/en.json` must equal it, and `translations/fi.json` must have exactly the same keys. `tests/test_translations.py` fails if a string is added, removed or renamed without updating every language. Entity names also come from these files (`entity.sensor.<translation_key>.name`).
+
 ## Removal
 
 Remove the integration entry under **Settings → Devices & services**, then remove its download in HACS and restart Home Assistant. This does not modify the meter or gateway.

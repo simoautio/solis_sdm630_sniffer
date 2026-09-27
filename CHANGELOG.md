@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- **Finnish translation** (suomi): setup, Configure, errors, Repairs issues, selector options and all entity names follow Home Assistant's language. English names are unchanged, and existing entity IDs and history are kept.
+- Entity names now come from the translation files instead of code.
+
 ## 0.5.3
 
 - Adding or changing the logger address now checks the logger with one read-only identity read, and shows *Could not read the logger* or *unsupported model* instead of saving a setup that never works. Changing only the polling interval does not need the logger online.
