@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.5
+## 0.6.0
 
 - New **PV energy** sensor for the Energy dashboard's solar production: all PV inputs combined, 0.1 kWh steps, never resets, so hourly bars are usable. It accumulates the inverter's daily counter and ignores bad reads that would otherwise book the whole day into one hour. Also offered as a utility meter source.
 
