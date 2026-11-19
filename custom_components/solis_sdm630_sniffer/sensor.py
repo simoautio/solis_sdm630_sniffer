@@ -87,6 +87,7 @@ INVERTER_DESCRIPTIONS = (
             ("pv2_power", "W", "power", "measurement"),
             ("solar_ac_power", "W", "power", "measurement"),
             ("household_power", "W", "power", "measurement"),
+            ("pv_energy", "kWh", "energy", "total_increasing"),
             ("estimated_solar_energy", "kWh", "energy", "total_increasing"),
             ("estimated_household_energy", "kWh", "energy", "total_increasing"),
         )

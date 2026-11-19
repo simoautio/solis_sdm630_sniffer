@@ -164,6 +164,7 @@ def _sources(entry: ConfigEntry) -> list[str]:
     needs = {
         "import": meter,
         "export": meter,
+        "pv": logger,
         "solar": logger,
         "household": meter and logger,
     }

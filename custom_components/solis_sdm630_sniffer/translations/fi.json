@@ -117,6 +117,7 @@
       "options": {
         "import": "Mittarin verkosta otettu energia",
         "export": "Mittarin verkkoon syötetty energia",
+        "pv": "PV-energia",
         "solar": "Arvioitu aurinkoenergia",
         "household": "Arvioitu kotitalouden energia"
       }
@@ -385,6 +386,9 @@
       },
       "inverter_household_power": {
         "name": "Kotitalouden teho"
+      },
+      "inverter_pv_energy": {
+        "name": "PV-energia"
       },
       "inverter_estimated_solar_energy": {
         "name": "Arvioitu aurinkoenergia"

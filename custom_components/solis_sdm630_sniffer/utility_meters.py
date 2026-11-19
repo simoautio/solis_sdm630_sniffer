@@ -21,6 +21,7 @@ DEFAULT_CYCLES = ("daily", "monthly", "yearly")
 SOURCES = {
     "import": "72",
     "export": "74",
+    "pv": "inverter_pv_energy",
     "solar": "inverter_estimated_solar_energy",
     "household": "inverter_estimated_household_energy",
 }

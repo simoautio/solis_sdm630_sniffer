@@ -59,15 +59,64 @@ async def test_failure_breaks_integration_and_does_not_stop_meter(runtime):
 
 
 async def test_restore_never_bridges_restart(runtime):
-    runtime.store.async_load = AsyncMock(return_value={"solar": 12, "household": 20})
+    pv = {"total": 40, "today": 5.0, "yesterday": 9.0}
+    runtime.store.async_load = AsyncMock(
+        return_value={"solar": 12, "household": 20, "pv": pv}
+    )
     runtime._schedule = lambda delay: None
     await runtime.async_start()
     assert runtime.solar.total == 12
     assert runtime.household.total == 20
     assert runtime.solar.previous is None
+    # Unlike the estimates, the counter-based total does bridge a restart.
+    assert runtime.pv.update(5.5, 9.0) == 40.5
     runtime.store.async_save = AsyncMock()
     await runtime.async_stop()
-    runtime.store.async_save.assert_awaited_once_with({"solar": 12, "household": 20})
+    runtime.store.async_save.assert_awaited_once_with(
+        {
+            "solar": 12,
+            "household": 20,
+            "pv": {"total": 40.5, "today": 5.5, "yesterday": 9.0},
+        }
+    )
+
+
+async def test_pv_energy_ignores_a_zero_read_of_the_daily_counter(runtime):
+    """One bad block must not replay the day into the Energy dashboard."""
+
+    def production(today, yesterday):
+        words = [0] * 12
+        words[6], words[7] = today, yesterday  # 33035, 33036 in tenths of kWh.
+        return tuple(words)
+
+    readings = iter(
+        [production(50, 90), production(52, 90), production(0, 0), production(54, 90)]
+    )
+    current = None
+
+    async def read(address, count):
+        nonlocal current
+        if address == 33000:
+            current = next(readings)
+            return (0x3306, 15, 27, 1)
+        return current if address == 33029 else (0,) * count
+
+    client = AsyncMock()
+    client.read.side_effect = read
+    runtime._running = True
+    runtime._schedule = lambda delay: None
+    seen = []
+    with patch(
+        "custom_components.solis_sdm630_sniffer.logger_runtime.ModbusReader"
+    ) as factory:
+        factory.return_value.__aenter__ = AsyncMock(return_value=client)
+        factory.return_value.__aexit__ = AsyncMock()
+        for _ in range(4):
+            await runtime.async_poll()
+            seen.append(runtime.values["pv_energy"])
+    assert seen == pytest.approx([0, 0.2, 0.2, 0.4])
+    assert runtime.is_available("pv_energy")
+    await runtime.async_stop()
 
 
 async def test_unsupported_group_keeps_other_readings(runtime):
@@ -118,7 +167,11 @@ async def test_setup_independence_restore_and_redaction(
         "version": 1,
         "minor_version": 1,
         "key": key,
-        "data": {"solar": 5, "household": 7},
+        "data": {
+            "solar": 5,
+            "household": 7,
+            "pv": {"total": 3, "today": 1.0, "yesterday": 2.0},
+        },
     }
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -163,7 +216,11 @@ async def test_setup_independence_restore_and_redaction(
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
-    assert hass_storage[key]["data"] == {"solar": 5, "household": 7}
+    assert hass_storage[key]["data"] == {
+        "solar": 5,
+        "household": 7,
+        "pv": {"total": 3, "today": 1.0, "yesterday": 2.0},
+    }
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert key not in hass_storage
@@ -214,6 +271,7 @@ async def test_logger_only_setup(hass, mqtt_transport):
         }
         assert "solo_inverter_solar_ac_power" in ids
         assert "solo_inverter_estimated_solar_energy" in ids
+        assert "solo_inverter_pv_energy" in ids
         assert (
             not {
                 "solo_52",

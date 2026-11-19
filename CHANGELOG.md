@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New **PV energy** sensor for the Energy dashboard's solar production: all PV inputs combined, 0.1 kWh steps, never resets, so hourly bars are usable. It accumulates the inverter's daily counter and ignores bad reads that would otherwise book the whole day into one hour. Also offered as a utility meter source.
+
 ## 0.5.4
 
 - **Finnish translation** (suomi): setup, Configure, errors, Repairs issues, selector options and all entity names follow Home Assistant's language. English names are unchanged, and existing entity IDs and history are kept.

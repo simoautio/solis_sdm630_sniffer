@@ -117,6 +117,7 @@
       "options": {
         "import": "Meter import energy",
         "export": "Meter export energy",
+        "pv": "PV energy",
         "solar": "Estimated solar energy",
         "household": "Estimated household energy"
       }
@@ -385,6 +386,9 @@
       },
       "inverter_household_power": {
         "name": "Household power"
+      },
+      "inverter_pv_energy": {
+        "name": "PV energy"
       },
       "inverter_estimated_solar_energy": {
         "name": "Estimated solar energy"

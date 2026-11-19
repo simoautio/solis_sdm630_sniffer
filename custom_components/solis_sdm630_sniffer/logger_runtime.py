@@ -23,7 +23,7 @@ from .const import (
     DEFAULT_LOGGER_UNIT,
     DOMAIN,
 )
-from .energy import EnergyEstimate, combined_power
+from .energy import DailyCounterTotal, EnergyEstimate, combined_power
 from .inverter_registers import BLOCKS, REGISTERS, SUPPORTED_MODEL
 from .modbus_tcp import ModbusError, ModbusReader, UnsupportedRegisters
 
@@ -68,6 +68,7 @@ class LoggerRuntime:
         self.updated_at = {}
         self.listeners: set[Callable[[], None]] = set()
         self.solar, self.household = EnergyEstimate(), EnergyEstimate()
+        self.pv = DailyCounterTotal()
         self.store = energy_store(hass, entry_id)
         self.issue_id = f"logger_unreachable_{entry_id}"
         self.failures = 0
@@ -91,6 +92,11 @@ class LoggerRuntime:
             value = data.get(key, 0)
             if isinstance(value, (int, float)):
                 counter.total = EnergyEstimate(value).total
+        pv = data.get("pv")
+        if isinstance(pv, dict):
+            self.pv = DailyCounterTotal(
+                pv.get("total"), pv.get("today"), pv.get("yesterday")
+            )
         self._loaded = True
         self._running = True
         self._remove_meter_listener = self.meter.async_add_listener(self._meter_changed)
@@ -117,7 +123,11 @@ class LoggerRuntime:
         self.listeners.clear()
 
     def _stored_data(self):
-        return {"solar": self.solar.total, "household": self.household.total}
+        return {
+            "solar": self.solar.total,
+            "household": self.household.total,
+            "pv": self.pv.as_dict(),
+        }
 
     def _checkpoint_data(self):
         """Capture current totals and allow the next bounded checkpoint."""
@@ -213,6 +223,11 @@ class LoggerRuntime:
                     key = f"pv{phase}_power"
                     values[key] = values[voltage] * values[current]
                     stamps[key] = min(stamps[voltage], stamps[current])
+            if "production_today" in values and "production_yesterday" in values:
+                values["pv_energy"] = self.pv.update(
+                    values["production_today"], values["production_yesterday"]
+                )
+                stamps["pv_energy"] = stamps["production_today"]
             self.update_combined(now)
             self.failures = 0
             self.last_error = None

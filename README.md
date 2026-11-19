@@ -149,7 +149,7 @@ You can change this setting at any time. It applies to these two power sensors o
 
 ### Utility meters
 
-Open **Configure → Create utility meters**, choose the **cycles** (quarter-hourly, hourly, daily, monthly, yearly; default daily/monthly/yearly) and **sources** (meter import/export by default; Estimated solar/household energy when the logger is configured), then save. The defaults create six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
+Open **Configure → Create utility meters**, choose the **cycles** (quarter-hourly, hourly, daily, monthly, yearly; default daily/monthly/yearly) and **sources** (meter import/export by default; PV energy and Estimated solar/household energy when the logger is configured), then save. The defaults create six standard Home Assistant [Utility Meter helpers](https://www.home-assistant.io/integrations/utility_meter/):
 
 | Helpers | Source |
 | --- | --- |
@@ -183,7 +183,7 @@ If the SDM630 measures your connection to the grid, configure **Settings → Das
 | --- | --- |
 | Grid consumption | Meter **Import energy** (kWh) |
 | Return to grid | Meter **Export energy** (kWh) |
-| Solar production | Inverter **PV production total** or **Estimated solar energy** (see below), or a SolisCloud sensor — pick exactly one |
+| Solar production | Inverter **PV energy** (see below), or a SolisCloud sensor — pick exactly one |
 
 Verify the meter's energy direction with known import/export conditions. Use the lifetime energy counters in the Energy dashboard; the daily/monthly/yearly helpers are optional for cards and automations. Do not add both a lifetime counter and its utility-meter helper to the same dashboard role, which would double-count energy.
 
@@ -206,12 +206,30 @@ Choose **Inverter only** or **Meter and inverter** when adding the integration a
 | L1/L2/L3 voltage and current, frequency, temperature, active/reactive/apparent power, grid port power, backup power | Inverter registers |
 | PV production today / this month / this year / total (and previous periods) | Native inverter counters. **PV production total has 1 kWh resolution.** |
 | Status; fault/status bits and model/firmware codes (shown as hex, e.g. `0x3306`); reported grid power, grid import/export and household values as seen by the inverter | Diagnostic |
+| **PV energy** (kWh) | The Energy dashboard's solar source: all strings combined, 0.1 kWh steps, never resets. Built from *PV production today* (see below). |
 | **Solar power** | Grid port power + backup power, never negative |
 | **Household power** | Inverter AC delivery + net grid power (import positive, export negative). Needs a fresh meter sample within 5 s of the logger sample; otherwise unavailable. |
 | **Estimated solar / household energy** (kWh) | Trapezoidal integration of the two power values. Persisted across restarts; gaps, outages and restarts are **not** bridged, so these are lower bounds. |
 | Household balance status | Why household power is or isn't available (`ok`, `meter_unavailable`, `unaligned_samples`, …) |
 
-For the Energy dashboard, keep the meter's **Import/Export energy** for the grid. For solar, use **either** the native **PV production total** (coarse but authoritative across outages) **or** **Estimated solar energy** (smooth, but misses outages) — never both. The **Reported grid import/export energy** counters are diagnostics only; the meter is authoritative for grid energy.
+For the Energy dashboard, keep the meter's **Import/Export energy** for the grid and use **PV energy** for solar. Add only one solar source. The **Reported grid import/export energy** counters are diagnostics only; the meter is authoritative for grid energy.
+
+### PV energy
+
+**PV energy** exists because none of the inverter's own counters gives good hourly bars:
+
+| Sensor | Problem as a solar source |
+| --- | --- |
+| PV production total | 1 kWh steps, so hourly bars read 0, 1, 0, 2. |
+| PV production today | Resets at midnight. A single bad read of 0 during the day looks like a reset, and the whole day so far is booked into one hour. |
+| Estimated solar energy | AC side (after inverter losses), and anything produced during an outage or restart is lost. |
+
+It adds up the increases of *PV production today*, which the inverter counts for every PV input together, into a total that is stored across restarts. A drop in the daily counter is accepted as midnight only when *PV production yesterday* takes over the finished day; any other drop is ignored as a bad read.
+
+- It starts at 0 when first created; it is not the inverter's lifetime total.
+- After a logger outage or restart within the same day, the energy produced meanwhile is added in the hour polling resumes: the day's total is right, the hours in between are empty.
+- If polling is down across midnight, production between the last reading and midnight is not counted.
+- Moving an existing Energy dashboard from another solar sensor to this one keeps the old statistics under the old sensor; the new one starts its own history.
 
 ## Diagnostics and troubleshooting
 

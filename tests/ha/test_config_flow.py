@@ -132,7 +132,7 @@ async def test_logger_only_options(hass):
     )
     assert result["errors"] == {"logger_host": "logger_required"}
     form = await open_options(hass, entry, "utility_meters")
-    assert form["data_schema"]({})["utility_meter_sources"] == ["solar"]
+    assert form["data_schema"]({})["utility_meter_sources"] == ["pv"]
 
 
 @pytest.mark.parametrize("topic", ["", "a/#", "a/+", "a\0b"])
